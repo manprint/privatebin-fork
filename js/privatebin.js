@@ -547,8 +547,92 @@ window.PrivateBin = (function () {
                 return baseUri;
             }
 
+            const configured = document.body.dataset.baseurl;
+            if (configured) {
+                baseUri = configured;
+                return baseUri;
+            }
+
             baseUri = window.location.origin + window.location.pathname;
             return baseUri;
+        };
+
+        /**
+         * returns true, when links use the path form (eg. /my-paste)
+         *
+         * @name   Helper.pathUrls
+         * @function
+         * @return {bool}
+         */
+        me.pathUrls = function () {
+            return document.body.dataset.pathurls === '1';
+        };
+
+        /**
+         * names that can not be used as document IDs, as they collide with
+         * files or routes of the application
+         *
+         * @name   Helper.reservedNames
+         * @private
+         * @type {array}
+         */
+        const reservedNames = [
+            'admin', 'api', 'bin', 'browserconfig', 'cfg', 'css', 'data',
+            'deletetoken', 'doc', 'favicon', 'i18n', 'img', 'index', 'js',
+            'jsonld', 'lib', 'link', 'manifest', 'pasteid', 'raw', 'robots',
+            'shortenviachhoto', 'shortenviashlink', 'shortenviayourls', 'tpl',
+            'tst', 'vendor'
+        ];
+
+        /**
+         * validate a user defined document name
+         *
+         * @name   Helper.isValidName
+         * @function
+         * @param  {string} name
+         * @return {bool}
+         */
+        me.isValidName = function (name) {
+            return /^[a-z0-9][a-z0-9_-]{3,63}$/.test(name) &&
+                reservedNames.indexOf(name) === -1;
+        };
+
+        /**
+         * validate a document tag
+         *
+         * @name   Helper.isValidTag
+         * @function
+         * @param  {string} tag
+         * @return {bool}
+         */
+        me.isValidTag = function (tag) {
+            return /^[a-z0-9][a-z0-9_-]{0,31}$/.test(tag);
+        };
+
+        /**
+         * build the link to a document
+         *
+         * @name   Helper.pasteUrl
+         * @function
+         * @param  {string} id
+         * @return {string}
+         */
+        me.pasteUrl = function (id) {
+            return me.pathUrls() ?
+                me.baseUri() + id :
+                me.baseUri() + '?' + id;
+        };
+
+        /**
+         * build the link to the raw (still encrypted) document
+         *
+         * @name   Helper.rawUrl
+         * @function
+         * @param  {string} id
+         * @return {string}
+         */
+        me.rawUrl = function (id) {
+            return me.baseUri() + '?pasteid=' + id + '&raw=1';
         };
 
         /**
@@ -1490,15 +1574,32 @@ window.PrivateBin = (function () {
             // do use URL interface, if possible
             const url = new URL(window.location);
 
-            for (const param of url.searchParams) {
-                const key = param[0];
-                const value = param[1];
-
-                if (value === '' && idRegEx.test(key)) {
-                    // safe, as the whole regex is matched
-                    id = key;
-                    return key;
+            // prefer the legacy hexadecimal document IDs, then try names
+            for (const allowNames of [false, true]) {
+                for (const param of url.searchParams) {
+                    const key = param[0];
+                    const value = param[1];
+                    if (value !== '') {
+                        continue;
+                    }
+                    if (allowNames ? Helper.isValidName(key) : idRegEx.test(key)) {
+                        // safe, as the whole regex is matched
+                        id = key;
+                        return key;
+                    }
                 }
+            }
+
+            // support path based links, eg. /my-paste
+            const basePath = new URL(Helper.baseUri()).pathname,
+                  remainder = url.pathname.indexOf(basePath) === 0 ?
+                      url.pathname.substring(basePath.length) :
+                      '';
+            const segments = remainder.split('/').filter((segment) => segment.length > 0);
+            const candidate = segments.length > 0 ? segments[segments.length - 1] : '';
+            if (Helper.isValidName(candidate)) {
+                id = candidate;
+                return id;
             }
 
             if (id === null) {
@@ -1506,6 +1607,31 @@ window.PrivateBin = (function () {
             }
 
             return id;
+        };
+
+        /**
+         * returns the key as it appears in the URL fragment
+         *
+         * @name   Model.getRawKey
+         * @function
+         * @return {string}
+         * @throws {string}
+         */
+        me.getRawKey = function () {
+            let key = window.location.hash;
+            if (key.startsWith(loadConfirmPrefix)) {
+                key = key.substring(loadConfirmPrefix.length);
+            } else {
+                key = key.substring(1);
+            }
+            const ampersandPos = key.indexOf('&');
+            if (ampersandPos > -1) {
+                key = key.substring(0, ampersandPos);
+            }
+            if (key === '') {
+                throw 'no encryption key given';
+            }
+            return key;
         };
 
         /**
@@ -3847,6 +3973,9 @@ window.PrivateBin = (function () {
             sendButton,
             retryButton,
             pasteExpiration = null,
+            identity = null,
+            pasteName = null,
+            pasteTag = null,
             retryButtonCallback,
             emailConfirmModal,
             emailConfirmBootstrapModal = null,
@@ -4389,6 +4518,9 @@ window.PrivateBin = (function () {
             burnAfterReadingOption.classList.remove('hidden');
             expiration.classList.remove('hidden');
             formatter.classList.remove('hidden');
+            if (identity) {
+                identity.classList.remove('hidden');
+            }
             newButton.classList.remove('hidden');
             if (openDiscussionOption) {
                 openDiscussionOption.classList.remove('hidden');
@@ -4416,6 +4548,9 @@ window.PrivateBin = (function () {
             sendButton.classList.add('hidden');
             expiration.classList.add('hidden');
             formatter.classList.add('hidden');
+            if (identity) {
+                identity.classList.add('hidden');
+            }
             burnAfterReadingOption.classList.add('hidden');
             if (openDiscussionOption) {
                 openDiscussionOption.classList.add('hidden');
@@ -4638,6 +4773,12 @@ window.PrivateBin = (function () {
         me.resetInput = function () {
             clearAttachmentInput();
             clearPasswordInput();
+            if (pasteName) {
+                pasteName.value = '';
+            }
+            if (pasteTag) {
+                pasteTag.value = '';
+            }
             if (burnAfterReading) {
                 burnAfterReading.checked = burnAfterReadingDefault;
             }
@@ -4663,6 +4804,48 @@ window.PrivateBin = (function () {
                     }
                 });
             }
+        };
+
+        /**
+         * returns the name entered for the new document, empty if none
+         *
+         * @name   TopNav.getName
+         * @function
+         * @return {string}
+         */
+        me.getName = function () {
+            return pasteName ? pasteName.value.trim() : '';
+        };
+
+        /**
+         * returns the tag entered for the new document, empty if none
+         *
+         * @name   TopNav.getTag
+         * @function
+         * @return {string}
+         */
+        me.getTag = function () {
+            return pasteTag ? pasteTag.value.trim() : '';
+        };
+
+        /**
+         * returns the unencrypted meta data for a new document
+         *
+         * @name   TopNav.getPasteMeta
+         * @function
+         * @return {object}
+         */
+        me.getPasteMeta = function () {
+            const meta = { 'expire': me.getExpiration() },
+                  name = me.getName(),
+                  tag = me.getTag();
+            if (name !== '') {
+                meta.name = name;
+            }
+            if (tag !== '') {
+                meta.tag = tag;
+            }
+            return meta;
         };
 
         /**
@@ -4952,6 +5135,9 @@ window.PrivateBin = (function () {
             openDiscussionOption = document.getElementById('opendiscussionoption');
             password = document.getElementById('password');
             passwordInput = document.getElementById('passwordinput');
+            identity = document.getElementById('pasteidentity');
+            pasteName = document.getElementById('pasteName');
+            pasteTag = document.getElementById('pasteTag');
             rawTextButton = document.getElementById('rawtextbutton');
             downloadTextButton = document.getElementById('downloadtextbutton');
             retryButton = document.getElementById('retrybutton');
@@ -5282,10 +5468,11 @@ window.PrivateBin = (function () {
             Alert.hideMessages();
 
             // show notification
-            const baseUri = Helper.baseUri() + '?',
-                url = baseUri + data.id + (TopNav.getBurnAfterReading() ? loadConfirmPrefix : '#') + CryptTool.base58encode(data.encryptionKey),
-                deleteUrl = baseUri + 'pasteid=' + data.id + '&deletetoken=' + data.deletetoken;
+            const baseUri = Helper.baseUri(),
+                url = Helper.pasteUrl(data.id) + (TopNav.getBurnAfterReading() ? loadConfirmPrefix : '#') + CryptTool.base58encode(data.encryptionKey),
+                deleteUrl = baseUri + '?pasteid=' + data.id + '&deletetoken=' + data.deletetoken;
             PasteStatus.createPasteNotification(url, deleteUrl);
+            CurlHint.show(data.id);
 
             // show new URL in browser bar
             history.pushState({ type: 'newpaste' }, document.title, url);
@@ -5453,7 +5640,21 @@ window.PrivateBin = (function () {
                 TopNav.getOpenDiscussion() ? 1 : 0,
                 TopNav.getBurnAfterReading() ? 1 : 0
             ]);
-            ServerInteraction.setUnencryptedData('meta', { 'expire': TopNav.getExpiration() });
+            const name = TopNav.getName(),
+                  tag = TopNav.getTag();
+            if (name !== '' && !Helper.isValidName(name)) {
+                Alert.hideLoading();
+                TopNav.showCreateButtons();
+                Alert.showError('Invalid name. Use 4 to 64 characters: a-z, 0-9, - and _. Reserved names are not allowed.');
+                return;
+            }
+            if (tag !== '' && !Helper.isValidTag(tag)) {
+                Alert.hideLoading();
+                TopNav.showCreateButtons();
+                Alert.showError('Invalid tag. Use up to 32 characters: a-z, 0-9, - and _.');
+                return;
+            }
+            ServerInteraction.setUnencryptedData('meta', TopNav.getPasteMeta());
 
             // prepare PasteViewer for later preview
             PasteViewer.setText(plainText);
@@ -5645,7 +5846,13 @@ window.PrivateBin = (function () {
                 const comment = new Comment(paste.comments[i]);
                 paste.comments[i] = comment;
                 // skip comments that were moved from another document or parent
-                if (!comment.isBoundTo(Model.getPasteId())) {
+                // (after a rename the previous document IDs are still accepted)
+                const previousIds = paste.meta && Array.isArray(paste.meta.previous_ids) ?
+                    paste.meta.previous_ids : [];
+                if (
+                    !comment.isBoundTo(Model.getPasteId()) &&
+                    !previousIds.some((previousId) => comment.isBoundTo(previousId))
+                ) {
                     commentDecryptionPromises.push(Promise.resolve(['', '']));
                     continue;
                 }
@@ -5737,12 +5944,94 @@ window.PrivateBin = (function () {
                         DiscussionViewer.finishDiscussion();
                     }
 
+                    CurlHint.show(Model.getPasteId());
+
                 })
                 .catch((err) => {
                     // wait for the user to type in the password,
                     // then PasteDecrypter.run will be called again
                     Alert.showError(err);
                 });
+        };
+
+        return me;
+    })();
+
+    /**
+     * Displays the command line download and decryption commands.
+     *
+     * @name CurlHint
+     * @class
+     */
+    const CurlHint = (function () {
+        const me = {};
+
+        let container = null,
+            curlCommand = null,
+            decryptCommand = null;
+
+        /**
+         * show the command line hint for a document
+         *
+         * @name   CurlHint.show
+         * @function
+         * @param {string} id
+         */
+        me.show = function (id) {
+            if (!container) {
+                return;
+            }
+            let key = '';
+            try {
+                key = Model.getRawKey();
+            } catch (error) {
+                key = '';
+            }
+            const file = id + '.json',
+                  curl = 'curl -sL \'' + Helper.rawUrl(id) + '\' -o \'' + file + '\'';
+            curlCommand.textContent = curl;
+            decryptCommand.textContent = key === '' ?
+                'php bin/privatebin-decrypt.php \'' + file + '\' \'<KEY>\'' :
+                'php bin/privatebin-decrypt.php \'' + file + '\' \'' + key + '\'';
+            container.classList.remove('hidden');
+        };
+
+        /**
+         * hide the command line hint
+         *
+         * @name   CurlHint.hide
+         * @function
+         */
+        me.hide = function () {
+            if (container) {
+                container.classList.add('hidden');
+            }
+        };
+
+        /**
+         * initialize the DOM elements and event handlers
+         *
+         * @name   CurlHint.init
+         * @function
+         */
+        me.init = function () {
+            container = document.getElementById('curlhint');
+            curlCommand = document.getElementById('curlcommand');
+            decryptCommand = document.getElementById('decryptcommand');
+            const copyButton = document.getElementById('copycurl');
+            if (!container || !curlCommand || !decryptCommand || !copyButton) {
+                container = null;
+                return;
+            }
+            copyButton.addEventListener('click', function () {
+                navigator.clipboard.writeText(
+                    curlCommand.textContent + '\n' + decryptCommand.textContent
+                ).then(function () {
+                    Alert.showStatus('Commands copied to clipboard.');
+                }).catch(function () {
+                    Alert.showError('Could not copy the commands to the clipboard.');
+                });
+            });
         };
 
         return me;
@@ -6006,6 +6295,7 @@ window.PrivateBin = (function () {
          * @function
          */
         me.newPaste = function () {
+            CurlHint.hide();
             // Important: This *must not* run Alert.hideMessages() as previous
             // errors from viewing a document should be shown.
             TopNav.hideAllButtons();
@@ -6221,6 +6511,7 @@ window.PrivateBin = (function () {
             Prompt.init();
             TopNav.init();
             UiHelper.init();
+            CurlHint.init();
             CopyToClipboard.init();
             PasswordPeek.init();
 
@@ -6287,6 +6578,7 @@ window.PrivateBin = (function () {
         PasteDecrypter: PasteDecrypter,
         PasswordPeek: PasswordPeek,
         CopyToClipboard: CopyToClipboard,
+        CurlHint: CurlHint,
         Controller: Controller
     };
 })();

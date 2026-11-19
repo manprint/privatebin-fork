@@ -122,11 +122,111 @@ describe('Model', function () {
                 }
             ));
         });
-        it('throws exception on non-hexadecimal document IDs', () => {
+        it('returns a name passed as empty query parameter', () => {
             const clean = globalThis.cleanup('', {
-                url: 'https://example.com/?gggggggggggggggg#key'
+                url: 'https://example.com/?my-paste#key'
+            });
+            assert.strictEqual(PrivateBin.Model.getPasteId(), 'my-paste');
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('returns a name passed in the path when path URLs are enabled', () => {
+            const clean = globalThis.cleanup(
+                '<body data-baseurl="https://example.com/" data-pathurls="1"></body>',
+                {url: 'https://example.com/my-paste#key'}
+            );
+            assert.strictEqual(PrivateBin.Model.getPasteId(), 'my-paste');
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('ignores reserved path segments', () => {
+            const clean = globalThis.cleanup(
+                '<body data-baseurl="https://example.com/" data-pathurls="1"></body>',
+                {url: 'https://example.com/admin'}
+            );
+            assert.throws(() => PrivateBin.Model.getPasteId());
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('returns a name passed in the path when path URLs are disabled', () => {
+            const clean = globalThis.cleanup(
+                '<body data-baseurl="https://example.com/"></body>',
+                {url: 'https://example.com/my-paste#key'}
+            );
+            assert.strictEqual(PrivateBin.Model.getPasteId(), 'my-paste');
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('ignores the base path itself', () => {
+            const clean = globalThis.cleanup(
+                '<body data-baseurl="https://example.com/privatebin/"></body>',
+                {url: 'https://example.com/privatebin/'}
+            );
+            assert.throws(() => PrivateBin.Model.getPasteId());
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('ignores reserved names in the query string', () => {
+            const clean = globalThis.cleanup('', {
+                url: 'https://example.com/?admin#key'
             });
             assert.throws(() => PrivateBin.Model.getPasteId());
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('throws exception on invalid document IDs', () => {
+            const clean = globalThis.cleanup('', {
+                url: 'https://example.com/?NotAValidName#key'
+            });
+            assert.throws(() => PrivateBin.Model.getPasteId());
+            PrivateBin.Model.reset();
+            clean();
+        });
+    });
+
+    describe('getRawKey', function () {
+        beforeEach(function () {
+            PrivateBin.Model.reset();
+        });
+
+        it('returns the fragment of the URL', () => {
+            const clean = globalThis.cleanup('', {
+                url: 'https://example.com/?my-paste#abc123'
+            });
+            assert.strictEqual(PrivateBin.Model.getRawKey(), 'abc123');
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('strips the load confirmation prefix', () => {
+            const clean = globalThis.cleanup('', {
+                url: 'https://example.com/?my-paste#-abc123'
+            });
+            assert.strictEqual(PrivateBin.Model.getRawKey(), 'abc123');
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('strips trailing query parts', () => {
+            const clean = globalThis.cleanup('', {
+                url: 'https://example.com/?my-paste#abc123&utm_source=test'
+            });
+            assert.strictEqual(PrivateBin.Model.getRawKey(), 'abc123');
+            PrivateBin.Model.reset();
+            clean();
+        });
+
+        it('throws when there is no key', () => {
+            const clean = globalThis.cleanup('', {
+                url: 'https://example.com/?my-paste'
+            });
+            assert.throws(() => PrivateBin.Model.getRawKey());
             PrivateBin.Model.reset();
             clean();
         });
@@ -162,7 +262,7 @@ describe('Model', function () {
                     const clean = globalThis.cleanup('', {url: common.urlToString(url)});
                     let result = false;
                     try {
-                        PrivateBin.Model.getPasteId();
+                        PrivateBin.Model.getPasteKey();
                     }
                     catch(err) {
                         result = true;

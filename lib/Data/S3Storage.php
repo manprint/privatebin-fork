@@ -224,6 +224,65 @@ class S3Storage extends AbstractData
     /**
      * @inheritDoc
      */
+    public function update($pasteid, array &$paste)
+    {
+        if (!$this->exists($pasteid)) {
+            return false;
+        }
+        return $this->_upload($this->_getKey($pasteid), $paste);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function renamePaste($oldid, $newid, array &$paste)
+    {
+        if ($this->exists($newid)) {
+            return false;
+        }
+        if (!$this->_upload($this->_getKey($newid), $paste)) {
+            return false;
+        }
+        $oldPrefix = $this->_getKey($oldid) . '/discussion/';
+        try {
+            foreach ($this->_listAllObjects($oldPrefix) as $entry) {
+                $key = $entry['Key'];
+                $items = explode('/', substr($key, strlen($oldPrefix)), 2);
+                if (count($items) !== 2) {
+                    continue;
+                }
+                $parentid = $items[0] === $oldid ? $newid : $items[0];
+                $newKey = $this->_getKey($newid) . '/discussion/' . $parentid . '/' . $items[1];
+                $this->_client->copyObject([
+                    'Bucket'     => $this->_bucket,
+                    'Key'        => $newKey,
+                    'CopySource' => $this->_bucket . '/' . $key,
+                ]);
+                $this->_client->deleteObject([
+                    'Bucket' => $this->_bucket,
+                    'Key'    => $key,
+                ]);
+            }
+        } catch (S3Exception $e) {
+            error_log('failed to move the discussion of ' . $oldid . ' to ' . $newid . ', ' .
+                trim(preg_replace('/\s\s+/', ' ', $e->getMessage())));
+            return false;
+        }
+        try {
+            $this->_client->deleteObject([
+                'Bucket' => $this->_bucket,
+                'Key'    => $this->_getKey($oldid),
+            ]);
+        } catch (S3Exception $e) {
+            error_log('failed to delete the old paste ' . $oldid . ', ' .
+                trim(preg_replace('/\s\s+/', ' ', $e->getMessage())));
+        }
+        return true;
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function delete($pasteid)
     {
         $name = $this->_getKey($pasteid);

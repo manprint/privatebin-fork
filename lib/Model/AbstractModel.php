@@ -101,7 +101,7 @@ abstract class AbstractModel
      */
     public function setId($id)
     {
-        if (!self::isValidId($id)) {
+        if (!static::isValidId($id)) {
             throw new TranslatedException('Invalid document ID.', 60);
         }
         $this->_id = $id;
@@ -120,8 +120,22 @@ abstract class AbstractModel
         $this->_validate($data);
         $this->_data = $data;
 
-        // calculate a 64 bit checksum to avoid collisions
-        $this->setId(hash('fnv1a64', $data['ct']));
+        $this->setId($this->_generateId($data));
+    }
+
+    /**
+     * Generate an ID for the given data.
+     *
+     * By default a 64 bit checksum is calculated to avoid collisions. Models
+     * that support user defined IDs override this method.
+     *
+     * @access protected
+     * @param  array $data
+     * @return string
+     */
+    protected function _generateId(array &$data)
+    {
+        return hash('fnv1a64', $data['ct']);
     }
 
     /**

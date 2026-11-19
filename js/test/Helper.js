@@ -328,6 +328,66 @@ describe('Helper', function () {
         });
     });
 
+    describe('pasteUrl and rawUrl', function () {
+        it('builds query string links by default', () => {
+            const clean = globalThis.cleanup('', {url: 'https://example.com/'});
+            assert.strictEqual(PrivateBin.Helper.pasteUrl('my-paste'), 'https://example.com/?my-paste');
+            assert.strictEqual(PrivateBin.Helper.rawUrl('my-paste'), 'https://example.com/?pasteid=my-paste&raw=1');
+            PrivateBin.Helper.reset();
+            clean();
+        });
+
+        it('builds path links when enabled', () => {
+            const clean = globalThis.cleanup(
+                '<body data-pathurls="1"></body>',
+                {url: 'https://example.com/privatebin/'}
+            );
+            assert.strictEqual(PrivateBin.Helper.pasteUrl('my-paste'), 'https://example.com/privatebin/my-paste');
+            PrivateBin.Helper.reset();
+            clean();
+        });
+
+        it('uses the configured base URL', () => {
+            const clean = globalThis.cleanup(
+                '<body data-baseurl="https://example.com/pb/" data-pathurls="1"></body>',
+                {url: 'https://example.com/pb/my-paste'}
+            );
+            assert.strictEqual(PrivateBin.Helper.baseUri(), 'https://example.com/pb/');
+            assert.strictEqual(PrivateBin.Helper.pasteUrl('another'), 'https://example.com/pb/another');
+            PrivateBin.Helper.reset();
+            clean();
+        });
+    });
+
+    describe('isValidName', function () {
+        it('accepts names from 4 to 64 allowed characters', () => {
+            assert.ok(PrivateBin.Helper.isValidName('my-paste'));
+            assert.ok(PrivateBin.Helper.isValidName('script_bash01'));
+            assert.ok(PrivateBin.Helper.isValidName('a'.repeat(64)));
+            assert.ok(!PrivateBin.Helper.isValidName('abc'));
+            assert.ok(!PrivateBin.Helper.isValidName('a'.repeat(65)));
+            assert.ok(!PrivateBin.Helper.isValidName('-starts-with-dash'));
+            assert.ok(!PrivateBin.Helper.isValidName('Uppercase'));
+            assert.ok(!PrivateBin.Helper.isValidName('with space'));
+        });
+
+        it('rejects reserved names', () => {
+            ['admin', 'api', 'js', 'index', 'pasteid', 'raw', 'vendor'].forEach(function (name) {
+                assert.ok(!PrivateBin.Helper.isValidName(name), name + ' is reserved');
+            });
+        });
+    });
+
+    describe('isValidTag', function () {
+        it('accepts tags up to 32 allowed characters', () => {
+            assert.ok(PrivateBin.Helper.isValidTag('shell'));
+            assert.ok(PrivateBin.Helper.isValidTag('a'.repeat(32)));
+            assert.ok(!PrivateBin.Helper.isValidTag('a'.repeat(33)));
+            assert.ok(!PrivateBin.Helper.isValidTag(''));
+            assert.ok(!PrivateBin.Helper.isValidTag('Shell'));
+        });
+    });
+
     describe('htmlEntities', function () {
         before(function () {
             globalThis.cleanup();

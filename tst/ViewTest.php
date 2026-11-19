@@ -70,6 +70,11 @@ class ViewTest extends TestCase
         foreach (new DirectoryIterator(PATH . 'tpl') as $file) {
             if ($file->getExtension() === 'php') {
                 $template = $file->getBasename('.php');
+                if ($template === 'admin') {
+                    // the administration template has its own variables and is
+                    // covered by the administration tests
+                    continue;
+                }
                 ob_start();
                 $page->draw($template);
                 $this->_content[$template] = ob_get_contents();

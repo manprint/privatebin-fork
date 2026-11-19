@@ -86,20 +86,62 @@ class Request
     /**
      * Return the paste ID of the current document.
      *
+     * Paste IDs can be passed as an empty query parameter
+     * (eg. ?my-paste) or as a path (eg. /my-paste).
+     *
      * @access private
      * @return string
      */
     private function getPasteId()
     {
-        foreach ($_GET as $key => $value) {
-            // only return if value is empty and key is 16 hex chars
-            $key = (string) $key;
-            if (empty($value) && Paste::isValidId($key)) {
+        $pathId = $this->_getPathPasteId();
+        if ($pathId !== null) {
+            return $pathId;
+        }
+
+        // prefer the legacy checksum IDs, then try names
+        foreach ([false, true] as $allowNames) {
+            foreach ($_GET as $key => $value) {
+                // only return if value is empty and key is a valid paste ID
+                $key = (string) $key;
+                if (
+                    !empty($value) ||
+                    ($allowNames ? !Paste::isValidName($key) : !Paste::isChecksumId($key))
+                ) {
+                    continue;
+                }
                 return $key;
             }
         }
 
         return 'invalid id';
+    }
+
+    /**
+     * Extract a paste ID from the request path.
+     *
+     * Supports URLs like /my-paste, /index.php/my-paste and installations in a
+     * sub directory, eg. /privatebin/my-paste.
+     *
+     * @access private
+     * @return string|null
+     */
+    private function _getPathPasteId()
+    {
+        $path = $this->getRequestUri();
+        $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+        $base = rtrim(str_replace('\\', '/', dirname($script)), '/');
+        if ($base !== '' && ($path === $base || strpos($path, $base . '/') === 0)) {
+            $path = substr($path, strlen($base));
+        }
+        $path = trim($path, '/');
+        if (strpos($path, 'index.php') === 0) {
+            $path = trim(substr($path, strlen('index.php')), '/');
+        }
+        if ($path === '' || strpos($path, '/') !== false || !Paste::isValidId($path)) {
+            return null;
+        }
+        return $path;
     }
 
     /**
@@ -138,6 +180,7 @@ class Request
                     'jsonld'           => FILTER_SANITIZE_SPECIAL_CHARS,
                     'link'             => FILTER_SANITIZE_URL,
                     'pasteid'          => FILTER_SANITIZE_SPECIAL_CHARS,
+                    'raw'              => FILTER_SANITIZE_SPECIAL_CHARS,
                     'shortenviayourls' => FILTER_SANITIZE_SPECIAL_CHARS,
                     'shortenviashlink' => FILTER_SANITIZE_SPECIAL_CHARS,
                     'shortenviachhoto' => FILTER_SANITIZE_SPECIAL_CHARS,
@@ -146,11 +189,17 @@ class Request
         if (
             !array_key_exists('pasteid', $this->_params) &&
             !array_key_exists('jsonld', $this->_params) &&
-            !array_key_exists('link', $this->_params) &&
-            array_key_exists('QUERY_STRING', $_SERVER) &&
-            !empty($_SERVER['QUERY_STRING'])
+            !array_key_exists('link', $this->_params)
         ) {
-            $this->_params['pasteid'] = $this->getPasteId();
+            $pathId = $this->_getPathPasteId();
+            if ($pathId !== null) {
+                $this->_params['pasteid'] = $pathId;
+            } elseif (
+                array_key_exists('QUERY_STRING', $_SERVER) &&
+                !empty($_SERVER['QUERY_STRING'])
+            ) {
+                $this->_params['pasteid'] = $this->getPasteId();
+            }
         }
 
         // prepare operation, depending on current parameters
@@ -259,6 +308,26 @@ class Request
     {
         $host = array_key_exists('HTTP_HOST', $_SERVER) ? filter_var($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL) : '';
         return empty($host) ? 'localhost' : $host;
+    }
+
+    /**
+     * Get the absolute base URL of the application, ending in a slash
+     *
+     * @access public
+     * @return string
+     */
+    public function getBaseUrl()
+    {
+        $scheme = 'http';
+        if (
+            (array_key_exists('HTTPS', $_SERVER) && !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+            (array_key_exists('HTTP_X_FORWARDED_PROTO', $_SERVER) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+        ) {
+            $scheme = 'https';
+        }
+        $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+        $directory = rtrim(str_replace('\\', '/', dirname($script)), '/');
+        return $scheme . '://' . $this->getHost() . $directory . '/';
     }
 
     /**

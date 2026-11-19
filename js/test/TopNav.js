@@ -848,6 +848,21 @@ describe('TopNav', function () {
         );
 
         it(
+            'clears the name and tag inputs',
+            function () {
+                document.documentElement.innerHTML =
+                    '<li id="burnafterreadingoption"><input type="checkbox" id="burnafterreading"></li>' +
+                    '<input id="pasteName" value="my-paste">' +
+                    '<input id="pasteTag" value="shell">';
+                PrivateBin.TopNav.init();
+                PrivateBin.TopNav.resetInput();
+                assert.strictEqual(PrivateBin.TopNav.getName(), '');
+                assert.strictEqual(PrivateBin.TopNav.getTag(), '');
+                cleanup();
+            }
+        );
+
+        it(
             'reset inputs to defaults (burnafterreading on)',
             function () {
                 let results = [];
@@ -968,6 +983,53 @@ describe('TopNav', function () {
                 cleanup();
             }
         );
+    });
+
+    describe('getName and getTag', function () {
+        before(function () {
+            cleanup();
+        });
+
+        it('returns the entered name and tag, trimmed', function () {
+            document.documentElement.innerHTML =
+                '<input id="pasteName" value="  my-paste  ">' +
+                '<input id="pasteTag" value=" shell ">';
+            PrivateBin.TopNav.init();
+            assert.strictEqual(PrivateBin.TopNav.getName(), 'my-paste');
+            assert.strictEqual(PrivateBin.TopNav.getTag(), 'shell');
+            cleanup();
+        });
+
+        it('returns empty strings when the fields are missing', function () {
+            document.documentElement.innerHTML = '';
+            PrivateBin.TopNav.init();
+            assert.strictEqual(PrivateBin.TopNav.getName(), '');
+            assert.strictEqual(PrivateBin.TopNav.getTag(), '');
+            cleanup();
+        });
+
+        it('includes the name and tag in the meta data when set', function () {
+            document.documentElement.innerHTML =
+                '<select id="pasteExpiration"><option value="1day" selected>1 day</option></select>' +
+                '<input id="pasteName" value="my-paste">' +
+                '<input id="pasteTag" value="shell">';
+            PrivateBin.TopNav.init();
+            assert.deepStrictEqual(
+                PrivateBin.TopNav.getPasteMeta(),
+                { expire: '1day', name: 'my-paste', tag: 'shell' }
+            );
+            cleanup();
+        });
+
+        it('omits empty name and tag from the meta data', function () {
+            document.documentElement.innerHTML =
+                '<select id="pasteExpiration"><option value="1day" selected>1 day</option></select>' +
+                '<input id="pasteName" value="">' +
+                '<input id="pasteTag" value="   ">';
+            PrivateBin.TopNav.init();
+            assert.deepStrictEqual(PrivateBin.TopNav.getPasteMeta(), { expire: '1day' });
+            cleanup();
+        });
     });
 
     describe('getFileList', function () {

@@ -208,12 +208,188 @@ class ControllerTest extends TestCase
         $this->assertEquals(0, $response['status'], 'outputs status');
         $this->assertTrue($this->_data->exists($response['id']), 'paste exists after posting data');
         $paste = $this->_data->read($response['id']);
-        $this->assertFalse(array_key_exists('created', $paste['meta']), 'does not output created');
+        $this->assertArrayHasKey('created', $paste['meta'], 'stores the creation date');
+        $this->assertIsInt($paste['meta']['created'], 'stores the creation date as integer');
         $this->assertEquals(
             hash_hmac('sha256', $response['id'], $paste['meta']['salt']),
             $response['deletetoken'],
             'outputs valid delete token'
         );
+    }
+
+    /**
+     * @runInSeparateProcess
+     */
+    public function testCreateNamedPaste()
+    {
+        $options = parse_ini_file(CONF, true);
+        $options['traffic']['limit'] = 0;
+        Helper::createIniFile(CONF, $options);
+        $paste = Helper::getPasteJson(['name' => 'my-paste', 'tag' => 'shell']);
+        $file = Helper::createTempFile();
+        file_put_contents($file, $paste);
+        Request::setInputStream($file);
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'JSONHttpRequest';
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['REMOTE_ADDR'] = '::1';
+        ob_start();
+        new Controller;
+        $content = ob_get_contents();
+        ob_end_clean();
+        $response = json_decode($content, true);
+        $this->assertEquals(0, $response['status'], 'outputs status');
+        $this->assertSame('my-paste', $response['id'], 'name is used as ID');
+        $this->assertStringContainsString('?my-paste', $response['url'], 'URL contains the name');
+        $this->assertTrue($this->_data->exists('my-paste'), 'named paste exists');
+
+        $stored = $this->_data->read('my-paste');
+        $this->assertSame('my-paste', $stored['meta']['name']);
+        $this->assertSame('shell', $stored['meta']['tag']);
+    }
+
+    /**
+     * @runInSeparateProcess
+     */
+    public function testCreateNamedPasteWithPathUrls()
+    {
+        $options = parse_ini_file(CONF, true);
+        $options['traffic']['limit'] = 0;
+        $options['main']['pathurls'] = true;
+        Helper::createIniFile(CONF, $options);
+        $paste = Helper::getPasteJson(['name' => 'my-paste']);
+        $file = Helper::createTempFile();
+        file_put_contents($file, $paste);
+        Request::setInputStream($file);
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'JSONHttpRequest';
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['REMOTE_ADDR'] = '::1';
+        ob_start();
+        new Controller;
+        $content = ob_get_contents();
+        ob_end_clean();
+        $response = json_decode($content, true);
+        $this->assertEquals(0, $response['status']);
+        $this->assertMatchesRegularExpression('#/my-paste\z#', $response['url'], 'URL uses the path form');
+    }
+
+    /**
+     * @runInSeparateProcess
+     */
+    public function testCreateDuplicateName()
+    {
+        $options = parse_ini_file(CONF, true);
+        $options['traffic']['limit'] = 0;
+        Helper::createIniFile(CONF, $options);
+        $paste = Helper::getPasteJson(['name' => 'duplicate-name']);
+        $file = Helper::createTempFile();
+        file_put_contents($file, $paste);
+        Request::setInputStream($file);
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'JSONHttpRequest';
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['REMOTE_ADDR'] = '::1';
+        ob_start();
+        new Controller;
+        ob_end_clean();
+
+        Request::setInputStream($file);
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        ob_start();
+        new Controller;
+        $content = ob_get_contents();
+        ob_end_clean();
+        $response = json_decode($content, true);
+        $this->assertEquals(1, $response['status'], 'duplicate name is rejected');
+        $this->assertSame('This name is already taken.', $response['message']);
+    }
+
+    /**
+     * @runInSeparateProcess
+     */
+    public function testCreateInvalidName()
+    {
+        $options = parse_ini_file(CONF, true);
+        $options['traffic']['limit'] = 0;
+        Helper::createIniFile(CONF, $options);
+        $paste = Helper::getPasteJson(['name' => 'Invalid Name']);
+        $file = Helper::createTempFile();
+        file_put_contents($file, $paste);
+        Request::setInputStream($file);
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'JSONHttpRequest';
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['REMOTE_ADDR'] = '::1';
+        ob_start();
+        new Controller;
+        $content = ob_get_contents();
+        ob_end_clean();
+        $response = json_decode($content, true);
+        $this->assertEquals(1, $response['status'], 'invalid name is rejected');
+        $this->assertSame('Invalid data.', $response['message']);
+    }
+
+    /**
+     * @runInSeparateProcess
+     */
+    public function testReadRaw()
+    {
+        $options = parse_ini_file(CONF, true);
+        $options['traffic']['limit'] = 0;
+        Helper::createIniFile(CONF, $options);
+        $paste = Helper::getPasteJson(['name' => 'my-paste', 'tag' => 'shell']);
+        $file = Helper::createTempFile();
+        file_put_contents($file, $paste);
+        Request::setInputStream($file);
+        $_SERVER['HTTP_X_REQUESTED_WITH'] = 'JSONHttpRequest';
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['REMOTE_ADDR'] = '::1';
+        ob_start();
+        new Controller;
+        ob_end_clean();
+
+        $_SERVER = [];
+        $_GET = [
+            'pasteid' => 'my-paste',
+            'raw' => '1',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['QUERY_STRING'] = 'pasteid=my-paste&raw=1';
+        $_SERVER['REMOTE_ADDR'] = '::1';
+        ob_start();
+        new Controller;
+        $content = ob_get_contents();
+        ob_end_clean();
+        $response = json_decode($content, true);
+        $this->assertIsArray($response, 'raw endpoint returns JSON: len=' . strlen($content) . ' err=' . json_last_error_msg() . ' head=' . substr($content, 0, 150) . ' tail=' . substr($content, -150));
+        $this->assertArrayHasKey('ct', $response);
+        $this->assertArrayHasKey('adata', $response);
+        $this->assertSame('my-paste', $response['meta']['name']);
+        $this->assertSame('shell', $response['meta']['tag']);
+        $this->assertArrayNotHasKey('salt', $response['meta'], 'server salt is not exposed');
+        $this->assertArrayNotHasKey('created', $response['meta'], 'creation timestamp is not exposed');
+        $this->assertArrayNotHasKey('comments', $response);
+    }
+
+    /**
+     * @runInSeparateProcess
+     */
+    public function testReadRawMissing()
+    {
+        $options = parse_ini_file(CONF, true);
+        $options['traffic']['limit'] = 0;
+        Helper::createIniFile(CONF, $options);
+        $_SERVER = [];
+        $_GET = [
+            'pasteid' => 'does-not-exist',
+            'raw' => '1',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['QUERY_STRING'] = 'pasteid=does-not-exist&raw=1';
+        $_SERVER['REMOTE_ADDR'] = '::1';
+        ob_start();
+        new Controller;
+        $content = ob_get_contents();
+        ob_end_clean();
+        $this->assertSame(404, http_response_code(), 'missing document returns 404');
+        $this->assertStringContainsString('does not exist', $content);
     }
 
     /**

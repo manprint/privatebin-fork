@@ -131,6 +131,11 @@ class Database extends AbstractData
             if (version_compare($db_version, Controller::VERSION, '<')) {
                 $this->_upgradeDatabase($db_version);
             }
+
+            // widen the ID columns to support user defined paste names
+            if ($this->_getConfig('SCHEMA') !== '2') {
+                $this->_upgradeSchemaV2();
+            }
         } else {
             throw new Exception(
                 'Missing configuration for key dsn, usr, pwd or opt in the section model_options, please check your configuration file', 6
@@ -211,6 +216,93 @@ class Database extends AbstractData
         }
 
         return $paste;
+    }
+
+    /**
+     * Update an existing paste.
+     *
+     * @access public
+     * @param  string $pasteid
+     * @param  array  $paste
+     * @return bool
+     */
+    public function update($pasteid, array &$paste)
+    {
+        list($data, $expireDate, $meta) = $this->_serializePaste($paste);
+        try {
+            return $this->_exec(
+                'UPDATE "' . $this->_sanitizeIdentifier('paste') .
+                '" SET "data" = ?, "expiredate" = ?, "meta" = ? WHERE "dataid" = ?',
+                [$data, $expireDate, $meta, $pasteid]
+            );
+        } catch (Exception $e) {
+            error_log('Error while attempting to update a paste in the database: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Rename an existing paste and move its discussion along.
+     *
+     * @access public
+     * @param  string $oldid
+     * @param  string $newid
+     * @param  array  $paste
+     * @return bool
+     */
+    public function renamePaste($oldid, $newid, array &$paste)
+    {
+        list($data, $expireDate, $meta) = $this->_serializePaste($paste);
+        $inTransaction = false;
+        try {
+            if ($this->_db->beginTransaction()) {
+                $inTransaction = true;
+            }
+            $this->_exec(
+                'UPDATE "' . $this->_sanitizeIdentifier('paste') .
+                '" SET "dataid" = ?, "data" = ?, "expiredate" = ?, "meta" = ? WHERE "dataid" = ?',
+                [$newid, $data, $expireDate, $meta, $oldid]
+            );
+            $this->_exec(
+                'UPDATE "' . $this->_sanitizeIdentifier('comment') .
+                '" SET "pasteid" = ? WHERE "pasteid" = ?',
+                [$newid, $oldid]
+            );
+            $this->_exec(
+                'UPDATE "' . $this->_sanitizeIdentifier('comment') .
+                '" SET "parentid" = ? WHERE "parentid" = ? AND "pasteid" = ?',
+                [$newid, $oldid, $newid]
+            );
+            if ($inTransaction) {
+                $this->_db->commit();
+            }
+            return true;
+        } catch (Exception $e) {
+            if ($inTransaction && $this->_db->inTransaction()) {
+                $this->_db->rollBack();
+            }
+            error_log('Error while attempting to rename a paste in the database: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Serialize a paste for storage, splitting the expiration date and meta
+     * data into their own columns.
+     *
+     * @access private
+     * @param  array $paste
+     * @return array [data, expire date, meta]
+     */
+    private function _serializePaste(array &$paste)
+    {
+        $expire_date = 0;
+        $meta = $paste['meta'];
+        if (array_key_exists('expire_date', $meta)) {
+            $expire_date = (int) $meta['expire_date'];
+            unset($meta['expire_date']);
+        }
+        return [Json::encode($paste), $expire_date, Json::encode($meta)];
     }
 
     /**
@@ -670,6 +762,116 @@ class Database extends AbstractData
     }
 
     /**
+     * get the column type for paste and parent IDs
+     *
+     * IDs are either a 16 character hexadecimal checksum or a user defined
+     * paste name of up to 64 characters.
+     *
+     * @access private
+     * @return string
+     */
+    private function _getIdType()
+    {
+        if ($this->_type === 'oci') {
+            return 'VARCHAR2(64)';
+        }
+        return 'VARCHAR(64)';
+    }
+
+    /**
+     * widen the ID columns of existing installations, so that user defined
+     * paste names can be stored
+     *
+     * The applied schema version is recorded in the config table.
+     *
+     * @access private
+     */
+    private function _upgradeSchemaV2()
+    {
+        try {
+            switch ($this->_type) {
+                case 'mysql':
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('paste') .
+                        '" MODIFY COLUMN "dataid" ' . $this->_getIdType() . ' NOT NULL'
+                    );
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('comment') .
+                        '" MODIFY COLUMN "pasteid" ' . $this->_getIdType() .
+                        ', MODIFY COLUMN "parentid" ' . $this->_getIdType()
+                    );
+                    break;
+                case 'pgsql':
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('paste') .
+                        '" ALTER COLUMN "dataid" TYPE ' . $this->_getIdType()
+                    );
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('comment') .
+                        '" ALTER COLUMN "pasteid" TYPE ' . $this->_getIdType() .
+                        ', ALTER COLUMN "parentid" TYPE ' . $this->_getIdType()
+                    );
+                    break;
+                case 'oci':
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('paste') .
+                        '" MODIFY ("dataid" ' . $this->_getIdType() . ' NOT NULL)'
+                    );
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('comment') .
+                        '" MODIFY ("pasteid" ' . $this->_getIdType() . ', "parentid" ' . $this->_getIdType() . ')'
+                    );
+                    break;
+                case 'mssql':
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('paste') .
+                        '" ALTER COLUMN "dataid" ' . $this->_getIdType() . ' NOT NULL'
+                    );
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('comment') .
+                        '" ALTER COLUMN "pasteid" ' . $this->_getIdType()
+                    );
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('comment') .
+                        '" ALTER COLUMN "parentid" ' . $this->_getIdType()
+                    );
+                    break;
+                case 'sqlite':
+                    // SQLite uses dynamic types, no conversion necessary
+                    break;
+                default:
+                    // ibm, informix and other drivers
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('paste') .
+                        '" MODIFY "dataid" ' . $this->_getIdType()
+                    );
+                    $this->_db->exec(
+                        'ALTER TABLE "' . $this->_sanitizeIdentifier('comment') .
+                        '" MODIFY "pasteid" ' . $this->_getIdType() .
+                        ', MODIFY "parentid" ' . $this->_getIdType()
+                    );
+                    break;
+            }
+        } catch (Exception $e) {
+            error_log('Error while attempting to widen the ID columns in the database: ' . $e->getMessage());
+            return;
+        }
+        try {
+            $this->_exec(
+                'INSERT INTO "' . $this->_sanitizeIdentifier('config') . '" VALUES(?,?)',
+                ['SCHEMA', '2']
+            );
+        } catch (Exception $e) {
+            // the row may already exist, try updating it instead
+            try {
+                $this->setValue('2', 'schema');
+            } catch (Exception $e) {
+                error_log('Error while attempting to record the database schema version: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
      * create the paste table
      *
      * @access private
@@ -681,7 +883,7 @@ class Database extends AbstractData
         $metaType = $this->_getMetaType();
         $this->_db->exec(
             'CREATE TABLE "' . $this->_sanitizeIdentifier('paste') . '" ( ' .
-            "\"dataid\" CHAR(16) NOT NULL$main_key, " .
+            "\"dataid\" " . $this->_getIdType() . " NOT NULL$main_key, " .
             "\"data\" $attachmentType, " .
             '"expiredate" INT, ' .
             "\"meta\" $metaType$after_key )"
@@ -700,8 +902,8 @@ class Database extends AbstractData
         $this->_db->exec(
             'CREATE TABLE "' . $this->_sanitizeIdentifier('comment') . '" ( ' .
             "\"dataid\" CHAR(16) NOT NULL$main_key, " .
-            '"pasteid" CHAR(16), ' .
-            '"parentid" CHAR(16), ' .
+            '"pasteid" ' . $this->_getIdType() . ', ' .
+            '"parentid" ' . $this->_getIdType() . ', ' .
             "\"data\" $dataType, " .
             "\"vizhash\" $dataType, " .
             "\"postdate\" INT$after_key )"

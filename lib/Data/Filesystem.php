@@ -15,6 +15,7 @@ use DirectoryIterator;
 use GlobIterator;
 use JsonException;
 use PrivateBin\Json;
+use PrivateBin\Model\Paste;
 
 /**
  * Filesystem
@@ -41,6 +42,25 @@ class Filesystem extends AbstractData
         '[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]';
 
     /**
+     * glob() pattern for a document ID referencing a parent, which can either
+     * be a paste name or a hexadecimal comment ID
+     *
+     * @const string
+     */
+    const DOCUMENT_ID_PATTERN = '[a-z0-9_-]*';
+
+    /**
+     * glob() pattern of valid characters in the folder levels and paste IDs
+     *
+     * Paste IDs can be the legacy 16 character hexadecimal checksum or a user
+     * defined name of at least 4 lowercase alphanumeric characters, dashes and
+     * underscores.
+     *
+     * @const string
+     */
+    const PATH_CHARS = '[a-z0-9_-]';
+
+    /**
      * glob() pattern of the two folder levels and the paste files under the
      * configured path. Needs to return both files with and without .php suffix,
      * so they can be hardened by _prependRename(), which is hooked into exists().
@@ -51,9 +71,8 @@ class Filesystem extends AbstractData
      * @link  https://man7.org/linux/man-pages/man7/glob.7.html
      * @const string
      */
-    const PASTE_FILE_PATTERN = DIRECTORY_SEPARATOR . '[a-f0-9][a-f0-9]' .
-        DIRECTORY_SEPARATOR . '[a-f0-9][a-f0-9]' . DIRECTORY_SEPARATOR .
-        self::ID_PATTERN . '*';
+    const PASTE_FILE_PATTERN = DIRECTORY_SEPARATOR . self::PATH_CHARS . self::PATH_CHARS .
+        DIRECTORY_SEPARATOR . self::PATH_CHARS . self::PATH_CHARS . DIRECTORY_SEPARATOR . '*';
 
     /**
      * first line in paste or comment files, to protect their contents from browsing exposed data directories
@@ -121,6 +140,93 @@ class Filesystem extends AbstractData
     }
 
     /**
+     * Update an existing paste.
+     *
+     * @access public
+     * @param  string $pasteid
+     * @param  array  $paste
+     * @return bool
+     */
+    public function update($pasteid, array &$paste)
+    {
+        if (!$this->exists($pasteid)) {
+            return false;
+        }
+        return $this->_store($this->_dataid2path($pasteid) . $pasteid . '.php', $paste);
+    }
+
+    /**
+     * Rename an existing paste and move its discussion along.
+     *
+     * @access public
+     * @param  string $oldid
+     * @param  string $newid
+     * @param  array  $paste
+     * @return bool
+     */
+    public function renamePaste($oldid, $newid, array &$paste)
+    {
+        $olddir = $this->_dataid2path($oldid);
+        $newdir = $this->_dataid2path($newid);
+        $oldfile = $olddir . $oldid . '.php';
+        $newfile = $newdir . $newid . '.php';
+        if (!is_file($oldfile) || is_file($newfile)) {
+            return false;
+        }
+        if (!is_dir($newdir) && !mkdir($newdir, 0700, true)) {
+            return false;
+        }
+        if (!$this->_store($newfile, $paste)) {
+            return false;
+        }
+
+        $olddisc = $this->_dataid2discussionpath($oldid);
+        $newdisc = $this->_dataid2discussionpath($newid);
+        $moved = [];
+        if (is_dir($olddisc)) {
+            if (!is_dir($newdisc) && !mkdir($newdisc, 0700, true)) {
+                unlink($newfile);
+                return false;
+            }
+            foreach (new GlobIterator($olddisc . DIRECTORY_SEPARATOR . '*.php') as $file) {
+                if (!$file->isFile()) {
+                    continue;
+                }
+                $items = explode('.', $file->getBasename('.php'));
+                if (count($items) !== 3) {
+                    continue;
+                }
+                $parentid = $items[2] === $oldid ? $newid : $items[2];
+                $target = $newdisc . $newid . '.' . $items[1] . '.' . $parentid . '.php';
+                if (!rename($file->getPathname(), $target)) {
+                    // roll back everything moved so far
+                    foreach ($moved as $from => $to) {
+                        rename($to, $from);
+                    }
+                    unlink($newfile);
+                    return false;
+                }
+                $moved[$file->getPathname()] = $target;
+            }
+            @rmdir($olddisc);
+        }
+        if (!unlink($oldfile)) {
+            // restore the discussion and remove the new paste, so that the
+            // rename can be retried without leaving a duplicate behind
+            if (count($moved) && !is_dir($olddisc)) {
+                mkdir($olddisc, 0700, true);
+            }
+            foreach (array_reverse($moved, true) as $from => $to) {
+                rename($to, $from);
+            }
+            @rmdir($newdisc);
+            unlink($newfile);
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Delete a paste and its discussion.
      *
      * @access public
@@ -173,7 +279,7 @@ class Filesystem extends AbstractData
             $discdir = $this->_dataid2discussionpath($pasteid);
             if (is_dir($discdir)) {
                 foreach (new GlobIterator($discdir . DIRECTORY_SEPARATOR . $pasteid .
-                    '.' . self::ID_PATTERN . '.' . self::ID_PATTERN) as $file
+                    '.' . self::ID_PATTERN . '.' . self::DOCUMENT_ID_PATTERN) as $file
                 ) {
                     if ($file->isFile()) {
                         $this->_prependRename($file->getPathname(), $file->getPathname() . '.php');
@@ -220,7 +326,7 @@ class Filesystem extends AbstractData
         $discdir = $this->_dataid2discussionpath($pasteid);
         if (is_dir($discdir)) {
             foreach (new GlobIterator($discdir . DIRECTORY_SEPARATOR . $pasteid .
-                '.' . self::ID_PATTERN . '.' . self::ID_PATTERN . '.php') as $file
+                '.' . self::ID_PATTERN . '.' . self::DOCUMENT_ID_PATTERN . '.php') as $file
             ) {
                 // Filename is in the form pasteid.commentid.parentid.php:
                 // - pasteid is the paste this reply belongs to.
@@ -295,6 +401,10 @@ class Filesystem extends AbstractData
                 $this->_last_cache[$key] = $value;
                 $content = '<?php' . PHP_EOL . '$GLOBALS[\'traffic_limiter\'] = ' . var_export($this->_last_cache, true) . ';';
                 break;
+            case 'admin_login':
+                $this->_last_cache['admin_login'] = $value;
+                $content = '<?php' . PHP_EOL . '$GLOBALS[\'admin_login\'] = ' . var_export($value, true) . ';';
+                break;
             default:
                 return false;
         }
@@ -339,6 +449,15 @@ class Filesystem extends AbstractData
                         if (array_key_exists($key, $this->_last_cache)) {
                             return $this->_last_cache[$key];
                         }
+                    }
+                }
+                break;
+            case 'admin_login':
+                $file = $this->_path . DIRECTORY_SEPARATOR . 'admin_login.php';
+                if (is_readable($file)) {
+                    require $file;
+                    if (array_key_exists('admin_login', $GLOBALS)) {
+                        return $GLOBALS['admin_login'];
                     }
                 }
                 break;
@@ -408,7 +527,10 @@ class Filesystem extends AbstractData
         $pastes = [];
         foreach (new GlobIterator($this->_path . self::PASTE_FILE_PATTERN) as $file) {
             if ($file->isFile()) {
-                $pastes[] = $file->getBasename('.php');
+                $pasteid = $file->getBasename('.php');
+                if (Paste::isValidId($pasteid)) {
+                    $pastes[] = $pasteid;
+                }
             }
         }
         return $pastes;

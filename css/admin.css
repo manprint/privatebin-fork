@@ -1,0 +1,85 @@
+/**
+ * PrivateBin
+ *
+ * a zero-knowledge paste bin
+ *
+ * @link      https://github.com/PrivateBin/PrivateBin
+ * @copyright 2012 Sébastien SAUVAGE (sebsauvage.net)
+ * @license   https://www.opensource.org/licenses/zlib-license.php The zlib/libpng License
+ */
+
+.admin-header {
+	background-color: var(--bs-dark);
+	color: var(--bs-light);
+	padding: 0.75rem 0;
+}
+
+.admin-brand {
+	color: var(--bs-light);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.admin-brand:hover,
+.admin-brand:focus {
+	color: var(--bs-light);
+	text-decoration: underline;
+}
+
+.admin-header .link-light {
+	color: var(--bs-light);
+}
+
+body {
+	background-color: var(--bs-body-bg);
+}
+
+#pastetable td {
+	vertical-align: middle;
+}
+
+#pastetable .paste-name {
+	font-weight: 600;
+	word-break: break-all;
+}
+
+#pastetable .paste-id {
+	font-family: var(--bs-font-monospace);
+	font-size: 0.85em;
+	word-break: break-all;
+}
+
+#pastetable .badge {
+	font-weight: 500;
+}
+
+#pastetable .btn-group {
+	flex-wrap: wrap;
+}
+
+@media (prefers-color-scheme: dark) {
+	body {
+		background-color: #212529;
+		color: #dee2e6;
+	}
+
+	.table {
+		--bs-table-color: #dee2e6;
+		--bs-table-bg: transparent;
+		--bs-table-striped-bg: rgba(255, 255, 255, 0.05);
+		--bs-table-striped-color: #dee2e6;
+		--bs-table-border-color: #495057;
+	}
+
+	.card {
+		--bs-card-bg: #2b3035;
+		--bs-card-color: #dee2e6;
+	}
+
+	.form-control,
+	.form-select {
+		background-color: #212529;
+		border-color: #495057;
+		color: #dee2e6;
+	}
+}

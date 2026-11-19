@@ -46,6 +46,27 @@ abstract class AbstractData
     abstract public function read($pasteid);
 
     /**
+     * Update an existing paste.
+     *
+     * @access public
+     * @param  string $pasteid
+     * @param  array  $paste
+     * @return bool
+     */
+    abstract public function update($pasteid, array &$paste);
+
+    /**
+     * Rename an existing paste and move its discussion along.
+     *
+     * @access public
+     * @param  string $oldid
+     * @param  string $newid
+     * @param  array  $paste
+     * @return bool
+     */
+    abstract public function renamePaste($oldid, $newid, array &$paste);
+
+    /**
      * Delete a paste and its discussion.
      *
      * @access public

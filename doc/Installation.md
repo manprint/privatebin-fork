@@ -192,6 +192,99 @@ Rocket loader and unchecked "Javascript" for Auto Minify, found in your domain
 settings, under "Speed". More information can be found in our
 [FAQ entry on Cloudflare related issues](https://github.com/PrivateBin/PrivateBin/wiki/FAQ#user-content-how-to-make-privatebin-work-when-using-cloudflare-for-ddos-protection).
 
+### Named documents, tags and path URLs
+
+When `pathurls` is enabled, the creation form accepts an optional document
+name. The name is used verbatim as the document ID, so `my-paste` becomes
+reachable at `https://example.com/my-paste` (or
+`https://example.com/privatebin/my-paste` when installed in a sub directory).
+Names must be 4 to 64 characters long, may contain lowercase letters, digits,
+`-` and `_`, and must not start with `-` or `_`. A few words such as `admin`,
+`api`, `data`, `js` and `lib` are reserved. Created documents may also carry an
+optional tag, useful for filtering them in the administration interface.
+
+Path style URLs require the web server to forward unknown paths to
+`index.php`. The query string form (`https://example.com/?my-paste`) works
+without any rewrite. For Apache, add this to the PrivateBin directory:
+
+```apache
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [L]
+```
+
+For nginx, use:
+
+```nginx
+location / {
+    try_files $uri $uri/ /index.php?$args;
+}
+```
+
+Both rules only apply to requests for paths that do not exist as files, so
+the static assets, the API and `admin.php` keep working. Renaming a document
+changes its ID, so previously shared links stop working; the discussion is
+moved along and old comments remain accepted through the `previous_ids`
+metadata stored with the document.
+
+### Administration interface
+
+The optional administration interface lists the server-side metadata of all
+documents: ID, name, tag, size, creation date and expiration date. It can
+filter by tag, expiration status and creation date, sort by date and rename,
+extend the lifetime of or delete documents. Because PrivateBin encrypts
+documents in the browser, the administration interface cannot show or search
+the document contents - the key never reaches the server.
+
+Enable it in the configuration file:
+
+```ini
+[admin]
+enabled = true
+tokenhash = "<hash printed by bin/privatebin-admin-token.php>"
+```
+
+Generate a new token and its hash with:
+
+```bash
+php bin/privatebin-admin-token.php
+```
+
+The token is 15 alphanumeric characters and is only stored as a SHA-256 hash
+in the configuration file. The login is rate limited: after five failed
+attempts, the client is locked out for fifteen minutes. The session cookie is
+`HttpOnly` and `SameSite=Strict`, state changing requests require a CSRF token
+and a successful login is required for every administration action.
+
+### Downloading and decrypting a document from the command line
+
+Every document can be downloaded in its encrypted form with a single request:
+
+```bash
+curl -sL 'https://example.com/?pasteid=my-paste&raw=1' -o my-paste.json
+```
+
+The response contains the same JSON document the browser receives, without the
+server side salt, expiration metadata and the discussion. The raw endpoint is
+also available for documents with a generated ID:
+
+```bash
+curl -sL 'https://example.com/?pasteid=5b65a01b43987bc2&raw=1' -o document.json
+```
+
+To decrypt it, pass the key from the URL fragment (the part after `#`, which
+is never sent to the server) to the bundled command line tool:
+
+```bash
+php bin/privatebin-decrypt.php my-paste.json '<key>'
+```
+
+The tool also accepts a URL or reads the document from standard input, prints
+the document contents and writes embedded attachments to the current
+directory. The creation view shows the matching `curl` and decryption commands
+for every newly created document.
+
 ### Using a Database Instead of Flat Files
 
 In the configuration file the `[model]` and `[model_options]` sections let you

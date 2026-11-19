@@ -11,6 +11,8 @@
 
 namespace PrivateBin;
 
+use PrivateBin\Model\Paste;
+
 /**
  * FormatV2
  *
@@ -80,11 +82,25 @@ class FormatV2
                 return false;
             }
             // For pastes: adata must have exactly 4 entries,
-            // and meta must contain only the 'expire' key.
+            // and meta must contain the 'expire' key and optionally the
+            // 'name' and 'tag' keys.
         } elseif ($adataLength !== 4 ||
             !is_array($message['meta']) ||
-            count($message['meta']) !== 1 ||
-            !array_key_exists('expire', $message['meta'])
+            !array_key_exists('expire', $message['meta']) ||
+            count(array_diff(array_keys($message['meta']), ['expire', 'name', 'tag'])) > 0
+        ) {
+            return false;
+        }
+
+        // Make sure optional name and tag have the expected type and format
+        if (
+            !$isComment &&
+            isset($message['meta']) &&
+            is_array($message['meta']) &&
+            (
+                (array_key_exists('name', $message['meta']) && !Paste::isValidName($message['meta']['name'])) ||
+                (array_key_exists('tag', $message['meta']) && !Paste::isValidTag($message['meta']['tag']))
+            )
         ) {
             return false;
         }

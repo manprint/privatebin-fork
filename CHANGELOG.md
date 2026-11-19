@@ -1,5 +1,14 @@
 # PrivateBin version history
 
+## Unreleased
+* ADDED: Optional document names, used as the document ID and therefore as a readable link, plus optional tags. Both are part of the encrypted meta data
+* ADDED: `pathurls` option to generate links like `https://example.com/my-paste` instead of query string links; requests to such paths are also supported without the option
+* ADDED: Administration interface (`admin.php`) to list, filter, sort, rename, expire and delete documents, protected by a 15 character token stored as a hash, with rate limited logins and CSRF protection. It only exposes meta data, as documents remain end-to-end encrypted
+* ADDED: Raw download endpoint (`?pasteid=<id>&raw=1`) returning the encrypted document and `bin/privatebin-decrypt.php` to decrypt it locally, plus the matching `curl` command in the creation view
+* CHANGED: `FormatV2` accepts the optional `name` and `tag` meta data fields on creation; stored documents also carry a creation timestamp and previous IDs, the latter used to keep discussions working after a rename
+* CHANGED: Data backends gained `update()` and `renamePaste()` methods, the database schema is upgraded automatically to support named IDs
+* FIXED: Discussions keep working after a document gets renamed
+
 ## 2.1.1 (2026-11-04)
 * ADDED: Translation for Korean (#2071)
 * ADDED: Comments authenticate the IDs of their document and parent comment if present. Older comments without these IDs are still accepted and shown, unless the new `discussionrequireauthenticatedids` option is enabled to validate these fields (#2101)

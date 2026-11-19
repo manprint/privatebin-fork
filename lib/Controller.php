@@ -81,6 +81,14 @@ class Controller
     private $_is_deleted = false;
 
     /**
+     * whether the raw document was output, in which case no view is rendered
+     *
+     * @access private
+     * @var bool
+     */
+    private $_is_raw = false;
+
+    /**
      * JSON message
      *
      * @access private
@@ -162,6 +170,10 @@ class Controller
             case 'chhotoproxy':
                 $this->_shortenerproxy(new ChhotoProxy($this->_conf, $this->_request->getParam('link')));
                 break;
+        }
+
+        if ($this->_is_raw) {
+            return;
         }
 
         $this->_setCacheHeaders();
@@ -374,6 +386,11 @@ class Controller
      */
     private function _read($dataid)
     {
+        if ($this->_request->getParam('raw')) {
+            $this->_readRaw($dataid);
+            return;
+        }
+
         if (!$this->_request->isJsonApiCall()) {
             return;
         }
@@ -391,6 +408,42 @@ class Controller
             }
         } catch (TranslatedException $e) {
             $this->_json_error($e->getMessage());
+        }
+    }
+
+    /**
+     * Output the raw stored document for download via command line tools.
+     *
+     * The document is still encrypted with the key from the URL fragment, the
+     * data can be decrypted locally with bin/privatebin-decrypt.php.
+     *
+     * @access private
+     * @param  string $dataid
+     */
+    private function _readRaw($dataid)
+    {
+        $this->_is_raw = true;
+        header('Content-Type: application/octet-stream');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: no-store');
+        header('Referrer-Policy: no-referrer');
+        try {
+            $paste = $this->_model->getPaste($dataid);
+            if (!$paste->exists()) {
+                http_response_code(404);
+                echo 'Document does not exist, has expired or has been deleted.';
+                return;
+            }
+            $data = $paste->get();
+            unset($data['comments'], $data['comment_count'], $data['comment_offset'], $data['@context']);
+            if (array_key_exists('salt', $data['meta'])) {
+                unset($data['meta']['salt']);
+            }
+            header('Content-Disposition: attachment; filename="' . $dataid . '.json"');
+            echo Json::encode($data);
+        } catch (TranslatedException $e) {
+            http_response_code(404);
+            echo $e->getMessage();
         }
     }
 
@@ -485,6 +538,9 @@ class Controller
         $page->assign('HTTPWARNING', $this->_conf->getKey('httpwarning'));
         $page->assign('HTTPSLINK', 'https://' . $this->_request->getHost() . $this->_request->getRequestUri());
         $page->assign('COMPRESSION', $this->_conf->getKey('compression'));
+        $page->assign('PATHURLS', $this->_conf->getKey('pathurls'));
+        $page->assign('BASEURL', $this->_request->getBaseUrl());
+        $page->assign('ADMIN', Admin::isEnabledFor($this->_conf));
         $page->assign('SRI', $this->_conf->getSection('sri'));
         $page->draw(TemplateSwitcher::getTemplate());
     }
@@ -559,7 +615,9 @@ class Controller
         $result = [
             'status' => 0,
             'id'     => $dataid,
-            'url'    => $this->_urlBase . '?' . $dataid,
+            'url'    => $this->_conf->getKey('pathurls') ?
+                rtrim($this->_urlBase, '/') . '/' . $dataid :
+                $this->_urlBase . '?' . $dataid,
         ] + $other;
         $this->_json = Json::encode($result);
     }

@@ -94,6 +94,84 @@ class RequestTest extends TestCase
         $this->assertEquals('read', $request->getOperation());
     }
 
+    public function testReadNamedPasteInQuery()
+    {
+        $this->reset();
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['QUERY_STRING'] = 'my-paste';
+        $_GET['my-paste'] = '';
+        $request = new Request;
+        $this->assertSame('my-paste', $request->getParam('pasteid'));
+        $this->assertSame('read', $request->getOperation());
+    }
+
+    public function testNamedPasteIdIsPreferredOnlyAfterChecksumIds()
+    {
+        $this->reset();
+        $id = Helper::getRandomId();
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['QUERY_STRING'] = 'my-paste&' . $id;
+        $_GET['my-paste'] = '';
+        $_GET[$id] = '';
+        $request = new Request;
+        $this->assertSame($id, $request->getParam('pasteid'), 'checksum ID takes precedence');
+    }
+
+    public function testReadNamedPasteInPath()
+    {
+        $this->reset();
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/my-paste';
+        $_SERVER['SCRIPT_NAME'] = '/index.php';
+        $request = new Request;
+        $this->assertSame('my-paste', $request->getParam('pasteid'));
+        $this->assertSame('read', $request->getOperation());
+    }
+
+    public function testReadNamedPasteInIndexPath()
+    {
+        $this->reset();
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/index.php/my-paste';
+        $_SERVER['SCRIPT_NAME'] = '/index.php';
+        $request = new Request;
+        $this->assertSame('my-paste', $request->getParam('pasteid'));
+    }
+
+    public function testReadNamedPasteInSubdirectoryPath()
+    {
+        $this->reset();
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/privatebin/my-paste';
+        $_SERVER['SCRIPT_NAME'] = '/privatebin/index.php';
+        $request = new Request;
+        $this->assertSame('my-paste', $request->getParam('pasteid'));
+    }
+
+    public function testInvalidPathIsIgnored()
+    {
+        $this->reset();
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/css/admin.css';
+        $_SERVER['SCRIPT_NAME'] = '/index.php';
+        $request = new Request;
+        $this->assertSame('view', $request->getOperation());
+        $this->assertSame('', $request->getParam('pasteid'));
+    }
+
+    public function testRawParameter()
+    {
+        $this->reset();
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['QUERY_STRING'] = 'pasteid=my-paste&raw=1';
+        $_GET['pasteid'] = 'my-paste';
+        $_GET['raw'] = '1';
+        $request = new Request;
+        $this->assertSame('my-paste', $request->getParam('pasteid'));
+        $this->assertSame('1', $request->getParam('raw'));
+        $this->assertSame('read', $request->getOperation());
+    }
+
     public function testDelete()
     {
         $this->reset();

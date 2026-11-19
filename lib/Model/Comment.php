@@ -138,7 +138,7 @@ class Comment extends AbstractModel
      */
     public function setParentId($id)
     {
-        if (!self::isValidId($id)) {
+        if (!Paste::isValidId($id)) {
             throw new TranslatedException('Invalid document ID.', 65);
         }
         $this->_data['parentid'] = $id;

@@ -81,6 +81,35 @@ class FormatV2Test extends TestCase
         $this->assertFalse(FormatV2::isValid($paste), 'invalid meta key');
     }
 
+    public function testFormatV2ValidatorAcceptsNameAndTag()
+    {
+        $paste = Helper::getPastePost(['name' => 'my-paste', 'tag' => 'shell']);
+        $this->assertTrue(FormatV2::isValid($paste), 'valid meta with name and tag');
+
+        $paste = Helper::getPastePost(['name' => 'my-paste']);
+        $this->assertTrue(FormatV2::isValid($paste), 'valid meta with name only');
+
+        $paste = Helper::getPastePost(['tag' => 'shell']);
+        $this->assertTrue(FormatV2::isValid($paste), 'valid meta with tag only');
+
+        $paste = Helper::getPastePost(['name' => 'Invalid Name']);
+        $this->assertFalse(FormatV2::isValid($paste), 'invalid name');
+
+        $paste = Helper::getPastePost(['name' => 'ab']);
+        $this->assertFalse(FormatV2::isValid($paste), 'name too short');
+
+        $paste = Helper::getPastePost(['tag' => 'not a tag']);
+        $this->assertFalse(FormatV2::isValid($paste), 'invalid tag');
+
+        $paste = Helper::getPastePost();
+        $paste['meta']['extra'] = 'value';
+        $this->assertFalse(FormatV2::isValid($paste), 'unknown meta key');
+
+        $paste = Helper::getPastePost();
+        unset($paste['meta']['expire']);
+        $this->assertFalse(FormatV2::isValid($paste), 'missing expire key');
+    }
+
     public function testFormatV2ValidatorRejectsMalformedTypes()
     {
         // malformed input must yield "false" (Invalid data) rather than a

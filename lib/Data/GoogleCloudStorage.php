@@ -166,6 +166,54 @@ class GoogleCloudStorage extends AbstractData
     /**
      * @inheritDoc
      */
+    public function update($pasteid, array &$paste)
+    {
+        if (!$this->exists($pasteid)) {
+            return false;
+        }
+        return $this->_upload($this->_getKey($pasteid), $paste);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function renamePaste($oldid, $newid, array &$paste)
+    {
+        if ($this->exists($newid)) {
+            return false;
+        }
+        if (!$this->_upload($this->_getKey($newid), $paste)) {
+            return false;
+        }
+        $oldPrefix = $this->_getKey($oldid) . '/discussion/';
+        try {
+            foreach ($this->_bucket->objects(['prefix' => $oldPrefix]) as $object) {
+                $key = $object->name();
+                $items = explode('/', substr($key, strlen($oldPrefix)), 2);
+                if (count($items) !== 2) {
+                    continue;
+                }
+                $parentid = $items[0] === $oldid ? $newid : $items[0];
+                $newKey = $this->_getKey($newid) . '/discussion/' . $parentid . '/' . $items[1];
+                $this->_bucket->object($key)->copy($newKey);
+                $object->delete();
+            }
+        } catch (Exception $e) {
+            error_log('failed to move the discussion of ' . $oldid . ' to ' . $newid . ', ' .
+                trim(preg_replace('/\s\s+/', ' ', $e->getMessage())));
+            return false;
+        }
+        try {
+            $this->_bucket->object($this->_getKey($oldid))->delete();
+        } catch (NotFoundException $e) {
+            // ignore if already deleted
+        }
+        return true;
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function delete($pasteid)
     {
         $name = $this->_getKey($pasteid);

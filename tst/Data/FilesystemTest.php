@@ -32,6 +32,73 @@ class FilesystemTest extends TestCase
         Helper::rmDir($this->_path);
     }
 
+    public function testNamedPasteStorage()
+    {
+        $paste = Helper::getPaste(['name' => 'my-paste', 'tag' => 'shell']);
+        $this->assertTrue($this->_model->create('my-paste', $paste), 'store named paste');
+        $this->assertTrue($this->_model->exists('my-paste'));
+        $this->assertSame('my-paste', $this->_model->read('my-paste')['meta']['name']);
+
+        $pastes = $this->_model->getAllPastes();
+        $this->assertContains('my-paste', $pastes, 'named pastes are listed');
+        $this->assertNotContains('not a paste id', $pastes);
+    }
+
+    public function testUpdate()
+    {
+        $paste = Helper::getPaste(['name' => 'update-paste']);
+        $this->assertTrue($this->_model->create('update-paste', $paste));
+        $paste['meta']['tag'] = 'updated';
+        $this->assertTrue($this->_model->update('update-paste', $paste), 'update stored paste');
+        $this->assertSame('updated', $this->_model->read('update-paste')['meta']['tag']);
+        $this->assertFalse($this->_model->update('missing-paste', $paste), 'update missing paste fails');
+    }
+
+    public function testRenamePasteMovesDiscussion()
+    {
+        $paste = Helper::getPaste(['name' => 'old-paste']);
+        $this->assertTrue($this->_model->create('old-paste', $paste));
+        $comment = Helper::getComment();
+        $this->assertTrue(
+            $this->_model->createComment('old-paste', 'old-paste', Helper::getCommentId(), $comment),
+            'store top-level comment'
+        );
+        // nested comment replying to the first one
+        $reply = Helper::getComment();
+        $this->assertTrue(
+            $this->_model->createComment('old-paste', Helper::getCommentId(), '5b65a01b43987bc3', $reply),
+            'store reply'
+        );
+
+        $paste['meta']['name'] = 'new-paste';
+        $this->assertTrue($this->_model->renamePaste('old-paste', 'new-paste', $paste), 'rename paste');
+        $this->assertFalse($this->_model->exists('old-paste'), 'old paste is gone');
+        $this->assertTrue($this->_model->exists('new-paste'), 'new paste exists');
+        $this->assertSame('new-paste', $this->_model->read('new-paste')['meta']['name']);
+
+        $comments = array_values($this->_model->readComments('new-paste'));
+        $this->assertCount(2, $comments, 'both comments were moved');
+        $parents = array_column($comments, 'parentid');
+        $this->assertContains('new-paste', $parents, 'top-level comment points to the new name');
+        $this->assertContains(Helper::getCommentId(), $parents, 'reply keeps its comment parent');
+        $this->assertTrue(
+            $this->_model->existsComment('new-paste', 'new-paste', Helper::getCommentId()),
+            'top-level comment is reachable under the new name'
+        );
+        $this->assertSame([], $this->_model->readComments('old-paste'), 'no comments left behind');
+    }
+
+    public function testRenamePasteRejectsExistingTarget()
+    {
+        foreach (['rename-a', 'rename-b'] as $id) {
+            $paste = Helper::getPaste(['name' => $id]);
+            $this->assertTrue($this->_model->create($id, $paste));
+        }
+        $paste = $this->_model->read('rename-a');
+        $this->assertFalse($this->_model->renamePaste('rename-a', 'rename-b', $paste), 'target exists');
+        $this->assertTrue($this->_model->exists('rename-a'), 'source is unchanged');
+    }
+
     public function testFileBasedDataStoreWorks()
     {
         $this->_model->delete(Helper::getPasteId());

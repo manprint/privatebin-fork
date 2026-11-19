@@ -136,6 +136,23 @@ languageselection = false
 ; Can be set to one these values: "none" / "zlib" (default).
 ; compression = "zlib"
 
+; Generate links in the path form, eg. https://example.com/my-paste instead of
+; https://example.com/?my-paste. Requires the web server to route unknown paths
+; to index.php, see doc/Installation.md. Defaults to false.
+; pathurls = false
+
+[admin]
+; Enable the administration interface at admin.php. It can only manage the
+; unencrypted meta data of documents (name, tag, expiration), as the document
+; contents remain end-to-end encrypted and are not accessible to the server.
+; Defaults to false.
+; enabled = false
+
+; SHA-256 hash of the 15 character alphanumeric administration token.
+; Generate a token and its hash with: php bin/privatebin-admin-token.php
+; The token is required to sign in at admin.php, never store it in plain text.
+;tokenhash = "…"
+
 [expire]
 ; expire value that is selected per default
 ; make sure the value exists in [expire_options]

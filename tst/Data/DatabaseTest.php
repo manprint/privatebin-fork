@@ -29,6 +29,9 @@ class DatabaseTest extends TestCase
     public function tearDown(): void
     {
         /* Tear Down Routine */
+        foreach (['my-paste', 'update-paste', 'old-paste', 'new-paste', 'rename-a', 'rename-b'] as $id) {
+            $this->_model->delete($id);
+        }
         if (is_dir($this->_path)) {
             Helper::rmDir($this->_path);
         }
@@ -45,6 +48,55 @@ class DatabaseTest extends TestCase
         ServerSalt::get();
         $this->assertFileDoesNotExist($file, 'legacy ServerSalt got removed');
         $this->assertEquals($salt, ServerSalt::get(), 'ServerSalt got preserved & migrated');
+    }
+
+    public function testNamedPasteStorage()
+    {
+        $paste = Helper::getPaste(['name' => 'my-paste', 'tag' => 'shell']);
+        $this->assertTrue($this->_model->create('my-paste', $paste), 'store named paste');
+        $this->assertTrue($this->_model->exists('my-paste'));
+        $this->assertSame('my-paste', $this->_model->read('my-paste')['meta']['name']);
+        $this->assertContains('my-paste', $this->_model->getAllPastes(), 'named pastes are listed');
+    }
+
+    public function testUpdate()
+    {
+        $paste = Helper::getPaste(['name' => 'update-paste']);
+        $this->assertTrue($this->_model->create('update-paste', $paste));
+        $paste['meta']['tag'] = 'updated';
+        $this->assertTrue($this->_model->update('update-paste', $paste), 'update stored paste');
+        $stored = $this->_model->read('update-paste');
+        $this->assertSame('updated', $stored['meta']['tag']);
+        $this->assertSame('update-paste', $stored['meta']['name']);
+    }
+
+    public function testRenamePasteMovesDiscussion()
+    {
+        $paste = Helper::getPaste(['name' => 'old-paste']);
+        $this->assertTrue($this->_model->create('old-paste', $paste));
+        $comment = Helper::getComment();
+        $this->assertTrue(
+            $this->_model->createComment('old-paste', 'old-paste', Helper::getCommentId(), $comment)
+        );
+        $reply = Helper::getComment();
+        $this->assertTrue(
+            $this->_model->createComment('old-paste', Helper::getCommentId(), '5b65a01b43987bc3', $reply)
+        );
+
+        $paste['meta']['name'] = 'new-paste';
+        $this->assertTrue($this->_model->renamePaste('old-paste', 'new-paste', $paste), 'rename paste');
+        $this->assertFalse($this->_model->exists('old-paste'), 'old paste is gone');
+        $this->assertTrue($this->_model->exists('new-paste'), 'new paste exists');
+        $this->assertSame('new-paste', $this->_model->read('new-paste')['meta']['name']);
+
+        $comments = array_values($this->_model->readComments('new-paste'));
+        $this->assertCount(2, $comments, 'both comments were moved');
+        $this->assertContains('new-paste', array_column($comments, 'parentid'), 'top-level comment points to the new name');
+        $this->assertTrue(
+            $this->_model->existsComment('new-paste', 'new-paste', Helper::getCommentId()),
+            'top-level comment is reachable under the new name'
+        );
+        $this->assertSame([], $this->_model->readComments('old-paste'), 'no comments left behind');
     }
 
     public function testDatabaseBasedDataStoreWorks()

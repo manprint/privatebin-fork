@@ -60,7 +60,7 @@ class Administration
     private function _delete($pasteId)
     {
         if (!Paste::isValidId($pasteId)) {
-            self::_error('given ID is not a valid document ID (16 hexadecimal digits)', 5);
+            self::_error('given ID is not a valid document ID (16 hexadecimal digits or a named document)', 5);
         }
         if (!$this->_store->exists($pasteId)) {
             self::_error('given ID does not exist, has expired or was already deleted', 6);

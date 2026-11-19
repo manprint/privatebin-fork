@@ -74,7 +74,7 @@ endif;
 		<meta property="og:image:width" content="180" />
 		<meta property="og:image:height" content="180" />
 	</head>
-	<body role="document" data-compression="<?php echo rawurlencode($COMPRESSION); ?>" class="d-flex flex-column h-100">
+	<body role="document" data-compression="<?php echo rawurlencode($COMPRESSION); ?>" data-baseurl="<?php echo I18n::encode($BASEURL ?? ''); ?>" data-pathurls="<?php echo !empty($PATHURLS) ? '1' : '0'; ?>" class="d-flex flex-column h-100">
 		<div id="passwordmodal" tabindex="-1" class="modal fade" role="dialog" aria-hidden="true">
 			<div class="modal-dialog" role="document">
 				<div class="modal-content">
@@ -280,6 +280,14 @@ if ($FILEUPLOAD) :
 <?php
 endif;
 ?>
+						<li id="pasteidentity" class="nav-item d-flex gap-2 hidden">
+							<input type="text" id="pasteName" name="pasteName" class="form-control" maxlength="64"
+								pattern="[a-z0-9][a-z0-9_-]{3,63}" placeholder="<?php echo I18n::_('Name (optional)'); ?>"
+								aria-label="<?php echo I18n::_('Document name, used as the link'); ?>" />
+							<input type="text" id="pasteTag" name="pasteTag" class="form-control" maxlength="32"
+								pattern="[a-z0-9][a-z0-9_-]{0,31}" placeholder="<?php echo I18n::_('Tag (optional)'); ?>"
+								aria-label="<?php echo I18n::_('Document tag'); ?>" />
+						</li>
 						<li id="formatter" class="nav-item d-flex hidden">
 							<label for="pasteFormatter" class="form-label my-auto me-1"><?php echo I18n::_('Format'); ?>:</label>
 							<select id="pasteFormatter" name="pasteFormatter" class="form-select">
@@ -298,6 +306,17 @@ endif;
 						</li>
 					</ul>
 					<ul class="navbar-nav gap-2">
+<?php
+if (!empty($ADMIN)) :
+?>
+						<li class="nav-item">
+							<a href="admin.php" class="btn btn-outline-secondary d-flex align-items-center gap-1" id="adminlink">
+								<svg width="16" height="16" fill="currentColor" aria-hidden="true"><use href="img/bootstrap-icons.svg#gear" /></svg> <?php echo I18n::_('Admin'), PHP_EOL; ?>
+							</a>
+						</li>
+<?php
+endif;
+?>
 						<li class="nav-item">
 							<div class="form-check form-switch navbar-text">
 								<input id="bd-theme" type="checkbox" class="form-check-input" />
@@ -440,6 +459,15 @@ endif;
 					<div role="alert" class="alert alert-success">
 						<svg width="16" height="16" fill="currentColor" aria-hidden="true"><use href="img/bootstrap-icons.svg#check" /></svg>
 						<div id="pastelink"></div>
+					</div>
+					<div id="curlhint" class="card mb-3 hidden">
+						<div class="card-body">
+							<h6 class="card-title"><?php echo I18n::_('Download via command line'); ?></h6>
+							<p class="card-text small"><?php echo I18n::_('The document stays encrypted. Download it with curl and decrypt it locally with the key from the link:'); ?></p>
+							<pre class="mb-2"><code id="curlcommand"></code></pre>
+							<p class="card-text small mb-2"><code id="decryptcommand"></code></p>
+							<button type="button" id="copycurl" class="btn btn-sm btn-secondary"><?php echo I18n::_('Copy commands'); ?></button>
+						</div>
 					</div>
 <?php
 if (!empty($URLSHORTENER)) :
