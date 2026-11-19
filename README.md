@@ -107,6 +107,23 @@ make image-push           # push the tag to the registry
 must be writable by the container user (`65534:82`), otherwise `image-run`
 starts a container that cannot work.
 
+`compose.prod.yml` deploys the built image, with no build step, mounting the
+host configuration (read only) and data directory:
+
+```bash
+cp cfg/conf.sample.php cfg/conf.php     # then edit it
+sudo chown -R 65534:82 data             # the container runs as nobody:www-data
+docker compose -f compose.prod.yml up -d
+```
+
+Environment variables override the defaults (`PRIVATEBIN_IMAGE`,
+`PRIVATEBIN_CONTAINER`, `PRIVATEBIN_PORT`, `PRIVATEBIN_CFG`, `PRIVATEBIN_DATA`),
+for example `PRIVATEBIN_PORT=8080 docker compose -f compose.prod.yml up -d`.
+The mount of `cfg/` is read only on purpose: the container never writes the
+configuration. Note that `cfg/conf.php` must be readable by the container user,
+a `600` file owned by `root` makes PrivateBin silently fall back to its
+defaults, which also disables the administration interface.
+
 The build uses `docker/Dockerfile`, based on
 `privatebin/nginx-fpm-alpine:2.1.1`, and needs no composer run: the production
 dependencies come from the base image, as `composer.json` and `composer.lock`

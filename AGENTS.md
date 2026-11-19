@@ -100,6 +100,14 @@ git fetch upstream --tags
    make image
    ```
 
+## Deploying the image
+
+`compose.prod.yml` runs the image built by `make image` with bind mounts and no
+build step (`PRIVATEBIN_IMAGE`, `PRIVATEBIN_PORT`, `PRIVATEBIN_DATA`,
+`PRIVATEBIN_CFG` override the defaults). The bind mounted `cfg/` is read only
+and `conf.php` must be readable by uid 65534, otherwise PrivateBin falls back to
+its defaults and the administration interface answers 404.
+
 ## Local deployment
 
 The sandbox deployment lives in `/home/agent/privatebin` (`app/` snapshot of

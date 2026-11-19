@@ -1,0 +1,39 @@
+# Production compose file for the fork image built by `make image`.
+#
+# It has no build section on purpose: the image is built once (`make image`)
+# and deployed as is, so the container never compiles code on the target host.
+# Configuration and data live on the host and are bind mounted.
+#
+#   cp cfg/conf.sample.php cfg/conf.php     # then edit it
+#   sudo chown -R 65534:82 data             # container runs as nobody:www-data
+#   docker compose -f compose.prod.yml up -d
+#
+# Override with environment variables, for example:
+#   PRIVATEBIN_PORT=8080 PRIVATEBIN_DATA=/srv/privatebin/data \
+#     docker compose -f compose.prod.yml up -d
+
+name: privatebin
+
+services:
+  privatebin:
+    image: ${PRIVATEBIN_IMAGE:-fabiop85/privatebin:v2.1.1-fork}
+    container_name: ${PRIVATEBIN_CONTAINER:-privatebin}
+    restart: unless-stopped
+    ports:
+      - "${PRIVATEBIN_PORT:-8081}:8080"
+    volumes:
+      # documents, the container user needs write access
+      - type: bind
+        source: ${PRIVATEBIN_DATA:-./data}
+        target: /srv/data
+      # configuration, mounted read only
+      - type: bind
+        source: ${PRIVATEBIN_CFG:-./cfg}
+        target: /srv/cfg
+        read_only: true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
