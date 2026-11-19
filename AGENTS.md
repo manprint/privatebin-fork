@@ -102,6 +102,8 @@ git fetch upstream --tags
 
 ## Deploying the image
 
+`README_DEPLOY_PROD_FORK.md` is the production runbook (build, configuration,
+compose, TLS proxy, verification, backup, upgrades, troubleshooting).
 `compose.prod.yml` runs the image built by `make image` with bind mounts and no
 build step (`PRIVATEBIN_IMAGE`, `PRIVATEBIN_PORT`, `PRIVATEBIN_DATA`,
 `PRIVATEBIN_CFG` override the defaults). The bind mounted `cfg/` is read only

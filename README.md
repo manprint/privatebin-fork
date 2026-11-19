@@ -132,6 +132,13 @@ at `/srv/cfg` (read only) and `/srv/data`; the container serves HTTP on port
 `8080` internally. An s6 service inside the container purges expired documents
 and removes empty directories once per hour.
 
+## Production deployment
+
+`README_DEPLOY_PROD_FORK.md` is the operational runbook: build and transfer of
+the image, minimal `[model]`/`[admin]` configuration, `compose.prod.yml` with
+bind mounts, TLS reverse proxy, verification, backup, upgrades and the usual
+failure modes.
+
 ## Further resources
 
 * [FAQ](https://github.com/PrivateBin/PrivateBin/wiki/FAQ)
