@@ -1,7 +1,13 @@
-.PHONY: all coverage coverage-js coverage-php doc doc-js doc-php increment sign test test-js test-php help
+.PHONY: all coverage coverage-js coverage-php doc doc-js doc-php image image-push image-run increment sign test test-js test-php help
 
-CURRENT_VERSION = 2.1.1
-VERSION ?= 2.1.1
+CURRENT_VERSION = 2.1.1-fork
+VERSION ?= 2.1.1-fork
+IMAGE ?= fabiop85/privatebin
+TAG ?= v$(VERSION)
+PORT ?= 8081
+CFG_DIR ?= $(CURDIR)/cfg
+DATA_DIR ?= $(CURDIR)/data
+DOCKER_RUN_ARGS ?=
 VERSION_FILES = README.md SECURITY.md doc/Installation.md js/package.json lib/Controller.php Makefile
 REGEX_CURRENT_VERSION := $(shell echo $(CURRENT_VERSION) | sed "s/\./\\\./g")
 REGEX_VERSION := $(shell echo $(VERSION) | sed "s/\./\\\./g")
@@ -27,6 +33,18 @@ doc-js: ## Generate JS code documentation.
 
 doc-php: ## Generate JS code documentation.
 	phpdoc --visibility=public,protected,private --target=doc/phpdoc --directory=lib/
+
+image: ## Build the container image, tagged $(IMAGE):$(TAG).
+	docker build --tag $(IMAGE):$(TAG) --file docker/Dockerfile .
+
+image-run: image ## Run the container image on port $(PORT), mounting $(CFG_DIR) and $(DATA_DIR).
+	docker run --rm --name privatebin-fork --publish $(PORT):8080 \
+		--mount type=bind,source=$(CFG_DIR),target=/srv/cfg,readonly \
+		--mount type=bind,source=$(DATA_DIR),target=/srv/data \
+		$(DOCKER_RUN_ARGS) $(IMAGE):$(TAG)
+
+image-push: image ## Push the container image, tagged $(IMAGE):$(TAG), to the registry.
+	docker push $(IMAGE):$(TAG)
 
 increment: ## Increment and commit new version number, set target version using `make increment VERSION=1.2.3`.
 	for F in `grep -l -R $(REGEX_CURRENT_VERSION) $(VERSION_FILES)`; \

@@ -1,0 +1,15 @@
+# only what the image build needs
+.git
+.github
+.tokensave
+tst
+doc
+vendor
+data
+cfg
+node_modules
+js/node_modules
+js/test
+js/nyc_output
+Evolutive.md
+Evolutive-Bugfix.md

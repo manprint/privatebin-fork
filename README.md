@@ -1,6 +1,6 @@
 # [![PrivateBin](https://raw.githubusercontent.com/PrivateBin/assets/master/images/preview/logoSmall.png)](https://privatebin.info/)
 
-*Current version: 2.1.1*
+*Current version: 2.1.1-fork*
 
 **PrivateBin** is a minimalist, open source online
 [pastebin](https://en.wikipedia.org/wiki/Pastebin)
@@ -91,6 +91,29 @@ file](https://github.com/PrivateBin/PrivateBin/wiki/Configuration):
 * Language selection (disabled by default, as it uses a session cookie)
 
 * QR code for paste URLs, to easily transfer them over to mobile devices
+
+## Container image
+
+`make image` builds the image of this repository as
+`fabiop85/privatebin:v2.1.1-fork` (override with `IMAGE=` and `VERSION=`):
+
+```bash
+make image                # docker build --tag fabiop85/privatebin:v2.1.1-fork
+make image-run PORT=8081  # run it, bind mounting ./cfg and ./data
+make image-push           # push the tag to the registry
+```
+
+`./cfg` must contain a `conf.php` (start from `cfg/conf.sample.php`), `./data`
+must be writable by the container user (`65534:82`), otherwise `image-run`
+starts a container that cannot work.
+
+The build uses `docker/Dockerfile`, based on
+`privatebin/nginx-fpm-alpine:2.1.1`, and needs no composer run: the production
+dependencies come from the base image, as `composer.json` and `composer.lock`
+are unchanged. Configuration and data are not baked into the image, mount them
+at `/srv/cfg` (read only) and `/srv/data`; the container serves HTTP on port
+`8080` internally. An s6 service inside the container purges expired documents
+and removes empty directories once per hour.
 
 ## Further resources
 

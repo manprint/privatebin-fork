@@ -1,0 +1,10 @@
+#!/bin/sh
+# Hourly maintenance: purge expired documents and remove the empty directories
+# that deletions leave behind. The first run happens right after the container
+# starts, subsequent ones every hour. Supervised by s6 like nginx and php-fpm,
+# so a crash of this script restarts it.
+while true; do
+    /usr/local/bin/php /srv/bin/administration --purge
+    /usr/local/bin/php /srv/bin/administration --empty-dirs
+    sleep 3600
+done
