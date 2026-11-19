@@ -232,8 +232,8 @@ metadata stored with the document.
 
 The optional administration interface lists the server-side metadata of all
 documents: ID, name, tag, size, creation date and expiration date. It can
-filter by tag, expiration status and creation date, sort by date and rename,
-extend the lifetime of or delete documents. Because PrivateBin encrypts
+filter by tag, expiration status and creation date, sort by date, extend the
+lifetime of or delete documents. Because PrivateBin encrypts
 documents in the browser, the administration interface cannot show or search
 the document contents - the key never reaches the server.
 
@@ -252,14 +252,29 @@ php bin/privatebin-admin-token.php
 ```
 
 The token is 15 alphanumeric characters and is only stored as a SHA-256 hash
-in the configuration file. The login is rate limited: after five failed
+in the configuration file. The interface is not linked from the home page, open
+`admin.php` directly. The login is rate limited: after five failed
 attempts, the client is locked out for fifteen minutes. The session cookie is
 `HttpOnly` and `SameSite=Strict`, state changing requests require a CSRF token
 and a successful login is required for every administration action.
 
 ### Downloading and decrypting a document from the command line
 
-Every document can be downloaded in its encrypted form with a single request:
+Every document can be downloaded decrypted with a single request, by adding the
+key from the URL fragment (the part after `#`) as the `key` parameter:
+
+```bash
+curl -sL 'https://example.com/?pasteid=my-paste&raw=1&key=<key>' -o my-paste.txt
+```
+
+The server decrypts the document for this request and returns its contents as
+text, a document consisting of a single attachment is returned as that file.
+Protecting a document with a password requires the additional `password`
+parameter. Note that the key is part of the request and is therefore visible to
+the server, its logs and anyone able to observe the connection: only use this
+variant for documents whose key you do not mind exposing to the server.
+
+Without the `key` parameter the document is returned in its encrypted form:
 
 ```bash
 curl -sL 'https://example.com/?pasteid=my-paste&raw=1' -o my-paste.json
@@ -273,8 +288,8 @@ also available for documents with a generated ID:
 curl -sL 'https://example.com/?pasteid=5b65a01b43987bc2&raw=1' -o document.json
 ```
 
-To decrypt it, pass the key from the URL fragment (the part after `#`, which
-is never sent to the server) to the bundled command line tool:
+To decrypt such a document while keeping the key on your machine, pass the key
+to the bundled command line tool:
 
 ```bash
 php bin/privatebin-decrypt.php my-paste.json '<key>'
@@ -282,8 +297,33 @@ php bin/privatebin-decrypt.php my-paste.json '<key>'
 
 The tool also accepts a URL or reads the document from standard input, prints
 the document contents and writes embedded attachments to the current
-directory. The creation view shows the matching `curl` and decryption commands
-for every newly created document.
+directory. The document view shows the matching `curl` command, both after
+creating a document and when opening the link of an existing one.
+
+### Housekeeping: purging expired documents
+
+Expired documents are deleted by a purge that runs when a new document is
+created, at most once every `[purge] limit` seconds and at most
+`[purge] batchsize` documents at a time. On a quiet instance this can delay the
+deletion for a long time, so it is recommended to run the purge hourly from
+cron instead:
+
+```cron
+7 * * * * php /srv/bin/administration --purge
+```
+
+With the `Filesystem` model, deleting a document also removes the directories
+of the data folder it leaves behind, unless they still contain other documents.
+Directories orphaned by earlier versions can be removed with:
+
+```cron
+17 * * * * php /srv/bin/administration --empty-dirs
+```
+
+Note that neither of these is a `VACUUM`: PrivateBin does no physical
+maintenance of a database. With the `Database` model, reclaiming space is left
+to the DBMS (`autovacuum` on PostgreSQL, `OPTIMIZE TABLE` on MySQL/MariaDB,
+`VACUUM` on SQLite).
 
 ### Using a Database Instead of Flat Files
 

@@ -306,17 +306,6 @@ endif;
 						</li>
 					</ul>
 					<ul class="navbar-nav gap-2">
-<?php
-if (!empty($ADMIN)) :
-?>
-						<li class="nav-item">
-							<a href="admin.php" class="btn btn-outline-secondary d-flex align-items-center gap-1" id="adminlink">
-								<svg width="16" height="16" fill="currentColor" aria-hidden="true"><use href="img/bootstrap-icons.svg#gear" /></svg> <?php echo I18n::_('Admin'), PHP_EOL; ?>
-							</a>
-						</li>
-<?php
-endif;
-?>
 						<li class="nav-item">
 							<div class="form-check form-switch navbar-text">
 								<input id="bd-theme" type="checkbox" class="form-check-input" />
@@ -460,15 +449,6 @@ endif;
 						<svg width="16" height="16" fill="currentColor" aria-hidden="true"><use href="img/bootstrap-icons.svg#check" /></svg>
 						<div id="pastelink"></div>
 					</div>
-					<div id="curlhint" class="card mb-3 hidden">
-						<div class="card-body">
-							<h6 class="card-title"><?php echo I18n::_('Download via command line'); ?></h6>
-							<p class="card-text small"><?php echo I18n::_('The document stays encrypted. Download it with curl and decrypt it locally with the key from the link:'); ?></p>
-							<pre class="mb-2"><code id="curlcommand"></code></pre>
-							<p class="card-text small mb-2"><code id="decryptcommand"></code></p>
-							<button type="button" id="copycurl" class="btn btn-sm btn-secondary"><?php echo I18n::_('Copy commands'); ?></button>
-						</div>
-					</div>
 <?php
 if (!empty($URLSHORTENER)) :
 ?>
@@ -507,6 +487,14 @@ endif;
 				<article>
 					<div id="placeholder" class="col-md-12 hidden"><?php echo I18n::_('+++ no document text +++'); ?></div>
 					<div id="attachmentPreview" class="col-md-12 text-center hidden"></div>
+					<div id="curlhint" class="card col-md-12 mb-3 hidden">
+						<div class="card-body">
+							<h6 class="card-title"><?php echo I18n::_('Download via command line'); ?></h6>
+							<p class="card-text small"><?php echo I18n::_('The document is downloaded decrypted. The key from the link is part of the command, so it is sent to the server for this single request:'); ?></p>
+							<pre class="mb-2"><code id="curlcommand"></code></pre>
+							<button type="button" id="copycurl" class="btn btn-sm btn-secondary"><?php echo I18n::_('Copy command'); ?></button>
+						</div>
+					</div>
 					<h6 id="copyShortcutHint" class="col-md-12 nav justify-content-between align-items-center mb-2 hidden">
 						<small id="copyShortcutHintText" class="d-none d-md-inline">
 							<?php

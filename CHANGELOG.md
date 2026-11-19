@@ -1,12 +1,19 @@
 # PrivateBin version history
 
 ## Unreleased
+* CHANGED: This fork reports its version as `2.1.1-fork` and identifies itself as PrivateBin in the footer
 * ADDED: Optional document names, used as the document ID and therefore as a readable link, plus optional tags. Both are part of the encrypted meta data
 * ADDED: `pathurls` option to generate links like `https://example.com/my-paste` instead of query string links; requests to such paths are also supported without the option
-* ADDED: Administration interface (`admin.php`) to list, filter, sort, rename, expire and delete documents, protected by a 15 character token stored as a hash, with rate limited logins and CSRF protection. It only exposes meta data, as documents remain end-to-end encrypted
-* ADDED: Raw download endpoint (`?pasteid=<id>&raw=1`) returning the encrypted document and `bin/privatebin-decrypt.php` to decrypt it locally, plus the matching `curl` command in the creation view
+* ADDED: Administration interface (`admin.php`) to list, filter, sort, expire and delete documents, protected by a 15 character token stored as a hash, with rate limited logins and CSRF protection. It only exposes meta data, as documents remain end-to-end encrypted, so the document name is not a link
+* ADDED: Raw download endpoint (`?pasteid=<id>&raw=1`) returning the encrypted document and `bin/privatebin-decrypt.php` to decrypt it locally. Adding the `key` (and optional `password`) parameter returns the decrypted document instead, the document view (also for existing links) and the creation view show the matching `curl` command with a copy button
 * CHANGED: `FormatV2` accepts the optional `name` and `tag` meta data fields on creation; stored documents also carry a creation timestamp and previous IDs, the latter used to keep discussions working after a rename
 * CHANGED: Data backends gained `update()` and `renamePaste()` methods, the database schema is upgraded automatically to support named IDs
+* CHANGED: Deleting a document from the filesystem data store also removes the directory tree it leaves behind, so empty directories no longer accumulate. Directories that still hold other documents are kept, existing leftovers are removed by `bin/administration --empty-dirs`
+* CHANGED: The administration interface is not linked from the home page anymore, `admin.php` has to be opened directly
+* CHANGED: The administration interface no longer renames documents and shows their name as plain text
+* FIXED: The administration interface was unusable in browsers, its content security policy lacked a `connect-src` for its own origin, so every request from the frontend failed with "Failed to fetch"
+* FIXED: Replaced assets got a new URL, as the cache buster now includes their modification time, so browsers can no longer block an updated script with the integrity hash of the cached copy
+* FIXED: Documents with burn after reading offered a `curl` command whose use would have consumed or no longer found the document, it is not shown for them
 * FIXED: Discussions keep working after a document gets renamed
 
 ## 2.1.1 (2026-11-04)

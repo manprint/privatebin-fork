@@ -257,6 +257,13 @@ class Filesystem extends AbstractData
                 }
                 rmdir($discdir);
             }
+
+            // Remove the directories of the document, so that deletions do not
+            // leave an empty directory tree behind. Both fail silently, as they
+            // are only removed when they are empty.
+            if (@rmdir($pastedir) && @rmdir(dirname(rtrim($pastedir, DIRECTORY_SEPARATOR)))) {
+                // parent directory removed as well
+            }
         }
     }
 

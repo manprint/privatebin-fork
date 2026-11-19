@@ -32,7 +32,7 @@ class Controller
      *
      * @const string
      */
-    const VERSION = '2.1.1';
+    const VERSION = '2.1.1-fork';
 
     /**
      * minimal required PHP version
@@ -414,8 +414,11 @@ class Controller
     /**
      * Output the raw stored document for download via command line tools.
      *
-     * The document is still encrypted with the key from the URL fragment, the
-     * data can be decrypted locally with bin/privatebin-decrypt.php.
+     * Without the `key` parameter the document is output still encrypted with the
+     * key from the URL fragment, the data can then be decrypted locally with
+     * bin/privatebin-decrypt.php. With the `key` parameter (and the optional
+     * `password`) the document is decrypted on the server and the plaintext is
+     * output instead.
      *
      * @access private
      * @param  string $dataid
@@ -423,13 +426,17 @@ class Controller
     private function _readRaw($dataid)
     {
         $this->_is_raw = true;
-        header('Content-Type: application/octet-stream');
         header('X-Content-Type-Options: nosniff');
         header('Cache-Control: no-store');
         header('Referrer-Policy: no-referrer');
+        $key = $this->_request->getParam('key');
+        $key = is_string($key) ? $key : '';
+        $password = $this->_request->getParam('password');
+        $password = is_string($password) ? $password : '';
         try {
             $paste = $this->_model->getPaste($dataid);
             if (!$paste->exists()) {
+                header('Content-Type: text/plain; charset=UTF-8');
                 http_response_code(404);
                 echo 'Document does not exist, has expired or has been deleted.';
                 return;
@@ -439,12 +446,78 @@ class Controller
             if (array_key_exists('salt', $data['meta'])) {
                 unset($data['meta']['salt']);
             }
+            if ($key !== '') {
+                $this->_readRawPlaintext($data, $dataid, $key, $password);
+                return;
+            }
+            header('Content-Type: application/octet-stream');
             header('Content-Disposition: attachment; filename="' . $dataid . '.json"');
             echo Json::encode($data);
         } catch (TranslatedException $e) {
             http_response_code(404);
             echo $e->getMessage();
         }
+    }
+
+    /**
+     * Output the decrypted document for download via command line tools.
+     *
+     * The plaintext of a document is output as text, a document consisting of a
+     * single attachment is output as that file. Documents with several
+     * attachments have to be decrypted locally with bin/privatebin-decrypt.php.
+     *
+     * @access private
+     * @param  array  $data stored document
+     * @param  string $dataid
+     * @param  string $key key from the URL fragment, base58 encoded
+     * @param  string $password optional password
+     */
+    private function _readRawPlaintext(array $data, $dataid, $key, $password)
+    {
+        header('Cache-Control: no-store');
+        try {
+            $decrypted = Decryptor::decryptFragmentToArray($data, $key, $password);
+        } catch (Exception $e) {
+            header('Content-Type: text/plain; charset=UTF-8');
+            http_response_code(400);
+            echo 'Could not decrypt the document: ' . $e->getMessage();
+            return;
+        }
+
+        $body = '';
+        if (isset($decrypted['paste']) && is_string($decrypted['paste'])) {
+            $body = $decrypted['paste'];
+        } elseif (isset($decrypted['comment']) && is_string($decrypted['comment'])) {
+            $body = $decrypted['comment'];
+        }
+        if ($body !== '') {
+            header('Content-Type: text/plain; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="' . $dataid . '.txt"');
+            echo $body;
+            if (substr($body, -1) !== "\n") {
+                echo PHP_EOL;
+            }
+            return;
+        }
+
+        $attachment = $decrypted['attachment'][0] ?? null;
+        if (is_string($attachment) && preg_match('#\Adata:([^;,]*)(;base64)?,#', $attachment, $match)) {
+            $payload = substr($attachment, strlen($match[0]));
+            $binary = empty($match[2]) ? rawurldecode($payload) : base64_decode($payload, true);
+            if ($binary !== false) {
+                $name = $decrypted['attachment_name'][0] ?? ($dataid . '.bin');
+                $name = preg_replace('#[^A-Za-z0-9._-]#', '_', basename((string) $name));
+                $name = trim((string) $name, '.') === '' ? ($dataid . '.bin') : $name;
+                header('Content-Type: ' . ($match[1] !== '' ? $match[1] : 'application/octet-stream'));
+                header('Content-Disposition: attachment; filename="' . $name . '"');
+                echo $binary;
+                return;
+            }
+        }
+
+        header('Content-Type: text/plain; charset=UTF-8');
+        http_response_code(400);
+        echo 'The document consists of several attachments, decrypt it locally with bin/privatebin-decrypt.php.';
     }
 
     /**
@@ -540,7 +613,6 @@ class Controller
         $page->assign('COMPRESSION', $this->_conf->getKey('compression'));
         $page->assign('PATHURLS', $this->_conf->getKey('pathurls'));
         $page->assign('BASEURL', $this->_request->getBaseUrl());
-        $page->assign('ADMIN', Admin::isEnabledFor($this->_conf));
         $page->assign('SRI', $this->_conf->getSection('sri'));
         $page->draw(TemplateSwitcher::getTemplate());
     }

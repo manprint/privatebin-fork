@@ -263,11 +263,10 @@
 			const row = document.createElement('tr');
 
 			const nameCell = document.createElement('td');
-			const name = document.createElement('a');
+			// not a link: the administration interface has no key, so opening the
+			// document would only show the missing key error
+			const name = document.createElement('span');
 			name.className = 'paste-name';
-			name.href = './?pasteid=' + encodeURIComponent(paste.id);
-			name.target = '_blank';
-			name.rel = 'noopener';
 			name.textContent = paste.name || paste.id;
 			nameCell.appendChild(name);
 			if (paste.name && paste.name !== paste.id) {
@@ -303,13 +302,6 @@
 			actions.className = 'text-end';
 			const group = document.createElement('div');
 			group.className = 'btn-group';
-			group.appendChild(actionButton(t('Rename'), 'btn-outline-secondary', function () {
-				const newName = window.prompt(t('New name (4 to 64 characters: a-z, 0-9, - and _):'), paste.name || paste.id);
-				if (newName === null || newName === '' || newName === (paste.name || paste.id)) {
-					return;
-				}
-				runAction('rename', { id: paste.id, name: newName.trim() }, t('The document was renamed.'));
-			}));
 			group.appendChild(actionButton(t('Expiration'), 'btn-outline-secondary', function () {
 				const days = window.prompt(t('Validity in days (0 = no expiration):'), '7');
 				if (days === null || days === '') {

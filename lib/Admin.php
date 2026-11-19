@@ -37,6 +37,14 @@ class Admin
     const SESSION_NAME = 'PrivateBinAdmin';
 
     /**
+     * content security policy of the administration interface, which fetches its
+     * data from admin.php, hence it needs a connect-src allowlist for its origin
+     *
+     * @const string
+     */
+    const CSP_HEADER = 'default-src \'none\'; base-uri \'self\'; form-action \'self\'; connect-src \'self\'; script-src \'self\'; style-src \'self\'; img-src \'self\' data:; frame-ancestors \'none\'';
+
+    /**
      * number of seconds of inactivity before the session expires
      *
      * @const int
@@ -92,9 +100,6 @@ class Admin
                     break;
                 case 'list':
                     $this->_list();
-                    break;
-                case 'rename':
-                    $this->_rename();
                     break;
                 case 'expire':
                     $this->_expire();
@@ -451,25 +456,6 @@ class Admin
     }
 
     /**
-     * Rename a paste.
-     *
-     * @access private
-     */
-    private function _rename()
-    {
-        $this->_requireAuthentication();
-        $this->_requireCsrf();
-        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
-            $this->_json(['status' => 1, 'message' => 'Method not allowed.'], 405);
-            return;
-        }
-        $body = $this->_getJsonBody();
-        $paste = $this->_getPaste($body['id'] ?? '');
-        $paste->rename($body['name'] ?? '');
-        $this->_json(['status' => 0, 'id' => $paste->getId()]);
-    }
-
-    /**
      * Change the expiration of a paste.
      *
      * @access private
@@ -561,7 +547,7 @@ class Admin
      */
     private function _render()
     {
-        header('Content-Security-Policy: default-src \'none\'; base-uri \'self\'; form-action \'self\'; script-src \'self\'; style-src \'self\'; img-src \'self\' data:; frame-ancestors \'none\'');
+        header('Content-Security-Policy: ' . self::CSP_HEADER);
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: deny');
         header('Referrer-Policy: no-referrer');
@@ -594,9 +580,8 @@ class Admin
         $keys = [
             'All', 'Delete', 'Delete this document permanently?', 'Expiration',
             'Expired', 'Invalid number of days.', 'Never',
-            'New name (4 to 64 characters: a-z, 0-9, - and _):',
-            'No documents found.', 'Not authenticated.', 'Page', 'Rename',
-            'Request failed.', 'The document was deleted.', 'The document was renamed.',
+            'No documents found.', 'Not authenticated.', 'Page',
+            'Request failed.', 'The document was deleted.',
             'The expiration was updated.', 'The server returned an invalid response.',
             'Validity in days (0 = no expiration):', 'document', 'documents',
         ];

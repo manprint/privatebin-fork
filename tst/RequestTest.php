@@ -368,7 +368,9 @@ class RequestTest extends TestCase
     {
         $this->reset();
         $id = Helper::getRandomId();
-        $path = '/' . $this->getRandomQueryChars() . '/';
+        // uppercase characters make the path an invalid paste ID, so the ID has
+        // to be taken from the query string
+        $path = '/A' . $this->getRandomQueryChars() . '/';
         $queryParams = [$id];
         $queryParamCount = random_int(1, 5);
         for ($i = 0; $i < $queryParamCount; ++$i) {

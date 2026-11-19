@@ -5472,10 +5472,17 @@ window.PrivateBin = (function () {
                 url = Helper.pasteUrl(data.id) + (TopNav.getBurnAfterReading() ? loadConfirmPrefix : '#') + CryptTool.base58encode(data.encryptionKey),
                 deleteUrl = baseUri + '?pasteid=' + data.id + '&deletetoken=' + data.deletetoken;
             PasteStatus.createPasteNotification(url, deleteUrl);
-            CurlHint.show(data.id);
 
             // show new URL in browser bar
             history.pushState({ type: 'newpaste' }, document.title, url);
+
+            if (TopNav.getBurnAfterReading()) {
+                // the document is deleted on its first read, a download would destroy it
+                CurlHint.hide();
+            } else {
+                // the command line hint needs the key, which is only in the URL now
+                CurlHint.show(data.id);
+            }
 
             TopNav.showViewButtons();
 
@@ -5931,20 +5938,21 @@ window.PrivateBin = (function () {
                     // discourage cloning (it cannot really be prevented)
                     if (paste.isBurnAfterReadingEnabled()) {
                         TopNav.hideBurnAfterReadingButtons();
+                        // the document was deleted by this read, a download is pointless
+                        CurlHint.hide();
                     } else {
                         // we have to pass in remaining_time here
                         TopNav.showEmailButton(
                             paste.getTimeToLive(),
                             paste.isBurnAfterReadingEnabled()
                         );
+                        CurlHint.show(Model.getPasteId());
                     }
 
                     // only offer adding comments, after document was successfully decrypted
                     if (paste.isDiscussionEnabled()) {
                         DiscussionViewer.finishDiscussion();
                     }
-
-                    CurlHint.show(Model.getPasteId());
 
                 })
                 .catch((err) => {
@@ -5967,8 +5975,7 @@ window.PrivateBin = (function () {
         const me = {};
 
         let container = null,
-            curlCommand = null,
-            decryptCommand = null;
+            curlCommand = null;
 
         /**
          * show the command line hint for a document
@@ -5987,12 +5994,10 @@ window.PrivateBin = (function () {
             } catch (error) {
                 key = '';
             }
-            const file = id + '.json',
-                  curl = 'curl -sL \'' + Helper.rawUrl(id) + '\' -o \'' + file + '\'';
+            const file = id + '.txt',
+                  plainUrl = Helper.rawUrl(id) + (key === '' ? '' : '&key=' + encodeURIComponent(key)),
+                  curl = 'curl -sL \'' + plainUrl + '\' -o \'' + file + '\'';
             curlCommand.textContent = curl;
-            decryptCommand.textContent = key === '' ?
-                'php bin/privatebin-decrypt.php \'' + file + '\' \'<KEY>\'' :
-                'php bin/privatebin-decrypt.php \'' + file + '\' \'' + key + '\'';
             container.classList.remove('hidden');
         };
 
@@ -6017,19 +6022,16 @@ window.PrivateBin = (function () {
         me.init = function () {
             container = document.getElementById('curlhint');
             curlCommand = document.getElementById('curlcommand');
-            decryptCommand = document.getElementById('decryptcommand');
             const copyButton = document.getElementById('copycurl');
-            if (!container || !curlCommand || !decryptCommand || !copyButton) {
+            if (!container || !curlCommand || !copyButton) {
                 container = null;
                 return;
             }
             copyButton.addEventListener('click', function () {
-                navigator.clipboard.writeText(
-                    curlCommand.textContent + '\n' + decryptCommand.textContent
-                ).then(function () {
-                    Alert.showStatus('Commands copied to clipboard.');
+                navigator.clipboard.writeText(curlCommand.textContent).then(function () {
+                    Alert.showStatus('Command copied to clipboard.');
                 }).catch(function () {
-                    Alert.showError('Could not copy the commands to the clipboard.');
+                    Alert.showError('Could not copy the command to the clipboard.');
                 });
             });
         };

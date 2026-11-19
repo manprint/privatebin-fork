@@ -22,6 +22,102 @@ use Exception;
 class Decryptor
 {
     /**
+     * Alphabet used by the base58 encoding of the key, as used by the frontend.
+     *
+     * @const string
+     */
+    const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+    /**
+     * Length of the symmetric key, in bytes.
+     *
+     * @const int
+     */
+    const KEY_LENGTH = 32;
+
+    /**
+     * Decode a base58 encoded string, as found in the URL fragment.
+     *
+     * @access public
+     * @static
+     * @param  string $input
+     * @throws Exception
+     * @return string binary string
+     */
+    public static function base58decode($input)
+    {
+        if (!is_string($input) || $input === '') {
+            throw new Exception('Empty key.');
+        }
+        $bytes = [];
+        for ($i = 0, $length = strlen($input); $i < $length; ++$i) {
+            $value = strpos(self::BASE58_ALPHABET, $input[$i]);
+            if ($value === false) {
+                throw new Exception('Key is not base58 encoded.');
+            }
+            $carry = $value;
+            foreach ($bytes as $index => $byte) {
+                $carry += $byte * 58;
+                $bytes[$index] = $carry & 0xff;
+                $carry >>= 8;
+            }
+            while ($carry > 0) {
+                $bytes[] = $carry & 0xff;
+                $carry >>= 8;
+            }
+        }
+        // every leading "1" represents a leading NULL byte
+        $output = str_repeat("\0", strlen($input) - strlen(ltrim($input, '1')));
+        for ($i = count($bytes) - 1; $i >= 0; --$i) {
+            $output .= chr($bytes[$i]);
+        }
+        return $output;
+    }
+
+    /**
+     * Turn the key from the URL fragment into the string the frontend uses.
+     *
+     * The frontend base58 decodes the fragment and pads it with NULL bytes to
+     * the key length.
+     *
+     * @access public
+     * @static
+     * @param  string $fragment
+     * @throws Exception
+     * @return string
+     */
+    public static function decodeFragmentKey($fragment)
+    {
+        $decoded = self::base58decode($fragment);
+        if (strlen($decoded) > self::KEY_LENGTH) {
+            throw new Exception('Key is too long.');
+        }
+        return str_pad($decoded, self::KEY_LENGTH, "\0", STR_PAD_LEFT);
+    }
+
+    /**
+     * Decrypt a document with the key as found in the URL fragment.
+     *
+     * @access public
+     * @static
+     * @param  array  $data
+     * @param  string $fragment key from the URL fragment
+     * @param  string $password
+     * @throws Exception
+     * @return string JSON encoded plaintext
+     */
+    public static function decryptFragment(array $data, $fragment, $password = '')
+    {
+        try {
+            $key = self::decodeFragmentKey($fragment);
+        } catch (Exception $e) {
+            // not base58 encoded, use the given key unchanged
+            $key = $fragment;
+        }
+        return self::decrypt($data, $key, $password);
+    }
+
+    /**
      * Decrypt the data of a paste or comment.
      *
      * @access public
@@ -121,6 +217,28 @@ class Decryptor
     public static function decryptToArray(array $data, $key, $password = '')
     {
         $plaintext = self::decrypt($data, $key, $password);
+        $decoded = json_decode($plaintext, true, 10, JSON_THROW_ON_ERROR);
+        if (!is_array($decoded)) {
+            throw new Exception('Decrypted document is not valid.');
+        }
+        return $decoded;
+    }
+
+    /**
+     * Decrypt a document with the key from the URL fragment and return its
+     * decoded JSON structure.
+     *
+     * @access public
+     * @static
+     * @param  array  $data
+     * @param  string $fragment
+     * @param  string $password
+     * @throws Exception
+     * @return array
+     */
+    public static function decryptFragmentToArray(array $data, $fragment, $password = '')
+    {
+        $plaintext = self::decryptFragment($data, $fragment, $password);
         $decoded = json_decode($plaintext, true, 10, JSON_THROW_ON_ERROR);
         if (!is_array($decoded)) {
             throw new Exception('Decrypted document is not valid.');

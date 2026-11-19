@@ -112,7 +112,7 @@ class ViewTest extends TestCase
             );
             // testing version number in JS address, since other instances may not be present in different templates
             $this->assertMatchesRegularExpression(
-                '#<script[^>]+src="js/privatebin.js\\?' . rawurlencode(self::$version) . '"[^>]*>#',
+                '#<script[^>]+src="js/privatebin\\.js\\?' . rawurlencode(self::$version) . '(-\\d+)?"[^>]*>#',
                 $content,
                 $template . ': outputs version correctly'
             );

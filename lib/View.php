@@ -65,7 +65,9 @@ class View
     /**
      * get cache buster query string
      *
-     * if the file isn't versioned (ends in a digit), adds our own version as a query string
+     * if the file isn't versioned (ends in a digit), adds our own version as a query string.
+     * The modification time is appended, so that a replaced asset gets a new URL and
+     * browsers do not keep an outdated copy, which would be rejected by its SRI hash.
      *
      * @access private
      * @param  string $file
@@ -75,7 +77,10 @@ class View
         if ((bool) preg_match('#[0-9]\.m?js$#', (string) $file)) {
             return '';
         }
-        return '?' . rawurlencode($this->_variables['VERSION']);
+        $path = (defined('PUBLIC_PATH') ? PUBLIC_PATH . DIRECTORY_SEPARATOR : '') . $file;
+        $modified = @filemtime($path);
+        $version = $this->_variables['VERSION'] . ($modified === false ? '' : '-' . $modified);
+        return '?' . rawurlencode($version);
     }
 
     /**

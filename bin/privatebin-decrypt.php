@@ -75,7 +75,7 @@ try {
     if (!is_array($data)) {
         throw new Exception('Not a valid document.');
     }
-    $decrypted = Decryptor::decryptToArray($data, $key, $password);
+    $decrypted = Decryptor::decryptFragmentToArray($data, $key, $password);
 } catch (Exception $e) {
     fwrite(STDERR, $e->getMessage() . PHP_EOL);
     exit(3);

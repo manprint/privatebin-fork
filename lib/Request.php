@@ -178,7 +178,11 @@ class Request
                 $this->_params = filter_var_array($_GET, [
                     'deletetoken'      => FILTER_SANITIZE_SPECIAL_CHARS,
                     'jsonld'           => FILTER_SANITIZE_SPECIAL_CHARS,
+                    // the key and password are only used to decrypt on the server
+                    // for a single raw download, they are never reflected
+                    'key'              => FILTER_UNSAFE_RAW,
                     'link'             => FILTER_SANITIZE_URL,
+                    'password'         => FILTER_UNSAFE_RAW,
                     'pasteid'          => FILTER_SANITIZE_SPECIAL_CHARS,
                     'raw'              => FILTER_SANITIZE_SPECIAL_CHARS,
                     'shortenviayourls' => FILTER_SANITIZE_SPECIAL_CHARS,

@@ -211,6 +211,40 @@ class FilesystemTest extends TestCase
         }
     }
 
+    /**
+     * deleting a document removes the empty directory tree it leaves behind
+     */
+    public function testDeleteRemovesEmptyDirectories()
+    {
+        $id = Helper::getPasteId();
+        $dir = $this->_path . DIRECTORY_SEPARATOR . substr($id, 0, 2) . DIRECTORY_SEPARATOR . substr($id, 2, 2);
+        $paste = Helper::getPaste();
+        $this->assertTrue($this->_model->create($id, $paste), 'store paste');
+        $this->assertTrue(is_dir($dir), 'document directory exists');
+        $this->_model->delete($id);
+        $this->assertFalse(is_dir($dir), 'document directory was removed');
+        $this->assertFalse(is_dir(dirname($dir)), 'first level directory was removed');
+        $this->assertTrue(is_dir($this->_path), 'the data directory itself is kept');
+    }
+
+    /**
+     * deleting a document keeps directories that still hold other documents
+     */
+    public function testDeleteKeepsSharedDirectories()
+    {
+        $id = Helper::getPasteId();
+        // same first level directory, different second level one
+        $sibling = substr($id, 0, 2) . 'ff' . substr($id, 4);
+        $levelOne = $this->_path . DIRECTORY_SEPARATOR . substr($id, 0, 2);
+        $paste = Helper::getPaste();
+        $this->assertTrue($this->_model->create($id, $paste), 'store paste');
+        $this->assertTrue($this->_model->create($sibling, $paste), 'store sibling paste');
+        $this->_model->delete($id);
+        $this->assertFalse(is_dir($levelOne . DIRECTORY_SEPARATOR . substr($id, 2, 2)), 'own directory removed');
+        $this->assertTrue(is_dir($levelOne), 'shared first level directory is kept');
+        $this->assertTrue($this->_model->exists($sibling), 'sibling document untouched');
+    }
+
     public function testErrorDetection()
     {
         $error_log_setting = ini_get('error_log');

@@ -124,6 +124,12 @@ class AdminTest extends TestCase
         $this->assertStringContainsString('"All"', html_entity_decode($html));
     }
 
+    public function testCspHeaderAllowsOwnOriginConnections()
+    {
+        $this->assertStringContainsString("default-src 'none'", Admin::CSP_HEADER);
+        $this->assertStringContainsString("connect-src 'self'", Admin::CSP_HEADER, 'the admin frontend fetches admin.php, a missing connect-src blocks it');
+    }
+
     public function testVerifyToken()
     {
         $hash = hash('sha256', 'Abc1234567890xy');

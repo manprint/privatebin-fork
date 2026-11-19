@@ -125,4 +125,76 @@ class DecryptorTest extends TestCase
         $this->expectException(Exception::class);
         Decryptor::decryptToArray(['ct' => 'abc'], 'test-key');
     }
+
+    /**
+     * Base58 encode a binary string, as the frontend does for the URL fragment.
+     *
+     * @param  string $input
+     * @return string
+     */
+    private function _base58encode($input)
+    {
+        $alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        $bytes = array_values(unpack('C*', $input));
+        $output = '';
+        while (!empty($bytes)) {
+            $carry = 0;
+            $quotient = [];
+            foreach ($bytes as $byte) {
+                $carry = $carry * 256 + $byte;
+                $value = intdiv($carry, 58);
+                $carry %= 58;
+                if (!empty($quotient) || $value !== 0) {
+                    $quotient[] = $value;
+                }
+            }
+            $output = $alphabet[$carry] . $output;
+            $bytes = $quotient;
+        }
+        $leading = strlen($input) - strlen(ltrim($input, "\0"));
+        return str_repeat('1', $leading) . $output;
+    }
+
+    public function testBase58DecodeRestoresTheKey()
+    {
+        $key = random_bytes(32);
+        $this->assertSame($key, Decryptor::base58decode($this->_base58encode($key)));
+    }
+
+    public function testFragmentKeyIsDecodedAndPadded()
+    {
+        // a short key is padded with NULL bytes on the left, like the frontend
+        $key = "\x01\x02\x03";
+        $decoded = Decryptor::decodeFragmentKey($this->_base58encode($key));
+        $this->assertSame(32, strlen($decoded));
+        $this->assertSame($key, substr($decoded, -3));
+        $this->assertSame(str_repeat("\0", 29), substr($decoded, 0, 29));
+    }
+
+    public function testDecryptsWithKeyFromTheUrlFragment()
+    {
+        $key = random_bytes(32);
+        $data = $this->_encrypt(['paste' => 'from the link'], $key);
+        $result = Decryptor::decryptFragmentToArray($data, $this->_base58encode($key));
+        $this->assertSame('from the link', $result['paste']);
+    }
+
+    public function testFragmentDecryptionFallsBackToAPlainKey()
+    {
+        $data = $this->_encrypt(['paste' => 'legacy key'], 'test-key');
+        $result = Decryptor::decryptFragmentToArray($data, 'test-key');
+        $this->assertSame('legacy key', $result['paste']);
+    }
+
+    public function testRejectsFragmentWithInvalidCharacters()
+    {
+        $this->expectException(Exception::class);
+        Decryptor::base58decode('not base58 0OIl');
+    }
+
+    public function testRejectsTooLongFragmentKey()
+    {
+        $this->expectException(Exception::class);
+        Decryptor::decodeFragmentKey($this->_base58encode(random_bytes(40)));
+    }
 }
