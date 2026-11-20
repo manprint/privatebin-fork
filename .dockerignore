@@ -1,5 +1,9 @@
-# only what the image build needs
+# Keep the build context to what the image needs: application code, assets,
+# front controllers and the maintenance service. vendor/ is excluded on
+# purpose, the production dependencies come from the base image, see
+# docker/Dockerfile. Configuration and data are never part of the image.
 .git
+.gitignore
 .github
 .tokensave
 tst
@@ -11,5 +15,10 @@ node_modules
 js/node_modules
 js/test
 js/nyc_output
+*.md
+*.tar.gz
+.env
+Makefile
+compose.prod.yml
 Evolutive.md
 Evolutive-Bugfix.md

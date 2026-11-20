@@ -132,6 +132,11 @@ at `/srv/cfg` (read only) and `/srv/data`; the container serves HTTP on port
 `8080` internally. An s6 service inside the container purges expired documents
 and removes empty directories once per hour.
 
+Every push to `main` and every `v*` tag builds the image in CI and publishes it
+as `ghcr.io/manprint/privatebin-fork`, tagged with the branch or tag name
+(`ghcr.io/manprint/privatebin-fork:v2.1.1-fork`); pull requests only build, so a
+broken build is caught before the merge.
+
 ## Production deployment
 
 `README_DEPLOY_PROD_FORK.md` is the operational runbook: build and transfer of

@@ -27,6 +27,33 @@ vendor/**/build_phar.php
 !vendor/**/*.php
 vendor/bin/**
 
+# Ignore the optional and test only dependencies of composer.json ("suggest"
+# and require-dev), they are installed locally to run the test suite
+/vendor/brick/
+/vendor/doctrine/
+/vendor/firebase/
+/vendor/google/
+/vendor/grpc/
+/vendor/guzzlehttp/
+/vendor/monolog/
+/vendor/myclabs/
+/vendor/nikic/
+/vendor/phar-io/
+/vendor/phpunit/
+/vendor/psr/
+/vendor/ralouphie/
+/vendor/ramsey/
+/vendor/rize/
+/vendor/sebastian/
+/vendor/symfony/deprecation-contracts/
+/vendor/symfony/polyfill-ctype/
+/vendor/symfony/polyfill-php81/
+/vendor/theseer/
+
+# Ignore local deployment files and container image exports
+/.env
+/*.tar.gz
+
 # Ignore local node modules, unit testing logs, api docs and IDE project files
 js/node_modules/
 js/mocha-results.xml
