@@ -5994,7 +5994,9 @@ window.PrivateBin = (function () {
             } catch (error) {
                 key = '';
             }
-            const file = id + '.txt',
+            // without a key the endpoint returns the encrypted document, keep
+            // the file extension in line with what actually gets downloaded
+            const file = id + (key === '' ? '.json' : '.txt'),
                   plainUrl = Helper.rawUrl(id) + (key === '' ? '' : '&key=' + encodeURIComponent(key)),
                   curl = 'curl -sL \'' + plainUrl + '\' -o \'' + file + '\'';
             curlCommand.textContent = curl;

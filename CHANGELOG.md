@@ -14,6 +14,7 @@
 * FIXED: The administration interface was unusable in browsers, its content security policy lacked a `connect-src` for its own origin, so every request from the frontend failed with "Failed to fetch"
 * FIXED: Replaced assets got a new URL, as the cache buster now includes their modification time, so browsers can no longer block an updated script with the integrity hash of the cached copy
 * FIXED: Documents with burn after reading offered a `curl` command whose use would have consumed or no longer found the document, it is not shown for them
+* FIXED: The `curl` command without a key promised a decrypted download (`.txt`), it now names the file `.json`, as the response stays encrypted
 * FIXED: Discussions keep working after a document gets renamed
 
 ## 2.1.1 (2026-11-04)
