@@ -30,7 +30,7 @@ jobs:
       packages: write
     steps:
       - name: Check out the sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
