@@ -116,7 +116,9 @@ its defaults and the administration interface answers 404.
 image as `ghcr.io/<owner>/<repository>` with the branch or tag name, on `main`
 and on tags matching `v*`; pull requests only build. Docker Hub is not
 configured, the workflow contains the two commented steps and the secrets
-(`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) needed to enable it. The upstream
+(`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) needed to enable it. Pushes to
+`main` made from the sandbox did not start the workflows, tag pushes and
+`gh workflow run "<name>" --ref <ref>` do, use those to verify a change. The upstream
 `tests.yml` runs on every push; PHP 8.5 is marked experimental there because
 `google/cloud-core` triggers a deprecation that fails the 18 GCS tests, the
 same failure seen locally.
